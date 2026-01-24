@@ -1,6 +1,6 @@
 # xcbuild-bridge
 
-Minimal JSON-over-stdin/stdout wrapper for `xcodebuild`.
+Minimal MCP server for Xcode simulator builds.
 
 ## Build
 
@@ -14,36 +14,23 @@ cargo build
 cargo test
 ```
 
-## Usage
-
-Input JSON:
+## Run (stdio MCP)
 
 ```
-{"args":["-version"]}
+cargo run -q
 ```
 
-Run:
+## Codex CLI config example
 
-```
-echo '{"args":["-version"]}' | cargo run -q
-```
-
-Output JSON:
-
-```
-{"ok":true,"exit_code":0,"terminated_by_signal":false,"stdout":"...","stderr":"","error":null}
+```toml
+[mcp_servers.xcbuild-bridge]
+command = "/absolute/path/to/xcbuild-bridge"
+args = []
 ```
 
-## Request schema
+## Core tools
 
-- `args`: required array of strings (passed to `xcodebuild`)
-- `cwd`: optional working directory
-
-## Response schema
-
-- `ok`: boolean
-- `exit_code`: integer (or -1 on failure)
-- `terminated_by_signal`: boolean
-- `stdout`: string
-- `stderr`: string
-- `error`: optional string
+- `session-set-defaults`
+- `session-show-defaults`
+- `session-clear-defaults`
+- `build_sim`
