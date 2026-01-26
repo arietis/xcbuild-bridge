@@ -34,3 +34,4 @@ args = []
 - `session-show-defaults`
 - `session-clear-defaults`
 - `build_sim`
+- `test_sim`

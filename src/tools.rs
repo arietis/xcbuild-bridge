@@ -4,6 +4,7 @@ use serde_json::{Value, json};
 use crate::build_sim::{BuildSimParamsInput, build_sim_from_input, execute_build_sim};
 use crate::exec::Runner;
 use crate::session::{SessionClearDefaultsParams, SessionSetDefaultsParams, SessionStore};
+use crate::test_sim::{TestSimParamsInput, execute_test_sim, test_sim_from_input};
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -130,6 +131,22 @@ pub fn tool_definitions() -> Vec<ToolDefinition> {
             }),
             annotations: Some(json!({ "destructiveHint": true })),
         },
+        ToolDefinition {
+            name: "test_sim",
+            title: "Test Simulator",
+            description: "Runs tests for an iOS simulator target.",
+            input_schema: json!({
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                    "derivedDataPath": { "type": "string" },
+                    "extraArgs": { "type": "array", "items": { "type": "string" } },
+                    "onlyTesting": { "type": "array", "items": { "type": "string" } },
+                    "skipTesting": { "type": "array", "items": { "type": "string" } }
+                }
+            }),
+            annotations: Some(json!({ "destructiveHint": true })),
+        },
     ]
 }
 
@@ -207,6 +224,27 @@ pub fn call_tool(
                 }
             };
             Ok(execute_build_sim(merged, runner))
+        }
+        "test_sim" => {
+            let params: TestSimParamsInput = match serde_json::from_value(args) {
+                Ok(params) => params,
+                Err(err) => {
+                    return Ok(ToolResponse::error(
+                        "Parameter validation failed".to_string(),
+                        Some(err.to_string()),
+                    ));
+                }
+            };
+            let merged = match test_sim_from_input(params, &session.get_all()) {
+                Ok(merged) => merged,
+                Err(err) => {
+                    return Ok(ToolResponse::error(
+                        "Parameter validation failed".to_string(),
+                        Some(err),
+                    ));
+                }
+            };
+            Ok(execute_test_sim(merged, runner))
         }
         _ => Err(ToolCallError::UnknownTool(name.to_string())),
     }

@@ -1,5 +1,6 @@
 use xcbuild_bridge::build_sim::{BuildSimParamsInput, build_sim_command, build_sim_from_input};
 use xcbuild_bridge::session::{SessionDefaults, SessionSetDefaultsParams, SessionStore};
+use xcbuild_bridge::test_sim::{TestSimParamsInput, test_sim_command, test_sim_from_input};
 
 #[test]
 fn session_set_defaults_prefers_workspace() {
@@ -164,4 +165,96 @@ fn build_sim_command_uses_simulator_name_and_latest() {
             .iter()
             .any(|arg| arg.contains("platform=iOS Simulator,name=iPhone 16,OS=latest"))
     );
+}
+
+#[test]
+fn test_sim_requires_required_fields() {
+    let defaults = SessionDefaults::default();
+    let input = TestSimParamsInput {
+        project_path: None,
+        workspace_path: None,
+        scheme: Some("App".to_string()),
+        configuration: None,
+        simulator_id: None,
+        simulator_name: None,
+        derived_data_path: None,
+        extra_args: None,
+        use_latest_os: None,
+        only_testing: None,
+        skip_testing: None,
+    };
+
+    let err = test_sim_from_input(input, &defaults).unwrap_err();
+    assert!(
+        err.contains("projectPath")
+            || err.contains("workspacePath")
+            || err.contains("simulatorId")
+            || err.contains("simulatorName")
+    );
+}
+
+#[test]
+fn test_sim_merges_defaults_and_sets_fallbacks() {
+    let defaults = SessionDefaults {
+        workspace_path: Some("App.xcworkspace".to_string()),
+        scheme: Some("App".to_string()),
+        simulator_id: Some("SIM-UUID".to_string()),
+        ..SessionDefaults::default()
+    };
+    let input = TestSimParamsInput {
+        project_path: None,
+        workspace_path: None,
+        scheme: None,
+        configuration: None,
+        simulator_id: None,
+        simulator_name: None,
+        derived_data_path: None,
+        extra_args: None,
+        use_latest_os: None,
+        only_testing: None,
+        skip_testing: None,
+    };
+
+    let params = test_sim_from_input(input, &defaults).unwrap();
+    assert_eq!(params.configuration, "Debug");
+    assert!(params.use_latest_os);
+}
+
+#[test]
+fn test_sim_command_includes_only_and_skip_testing() {
+    let defaults = SessionDefaults {
+        workspace_path: Some("App.xcworkspace".to_string()),
+        scheme: Some("App".to_string()),
+        simulator_id: Some("SIM-UUID".to_string()),
+        ..SessionDefaults::default()
+    };
+    let input = TestSimParamsInput {
+        project_path: None,
+        workspace_path: None,
+        scheme: None,
+        configuration: None,
+        simulator_id: None,
+        simulator_name: None,
+        derived_data_path: None,
+        extra_args: None,
+        use_latest_os: None,
+        only_testing: Some(vec!["UITests/SmokeTests/testLaunch".to_string()]),
+        skip_testing: Some(vec!["UITests/SmokeTests/testSlow".to_string()]),
+    };
+
+    let params = test_sim_from_input(input, &defaults).unwrap();
+    let spec = test_sim_command(&params);
+    assert!(spec.args.iter().any(|arg| arg == "-only-testing"));
+    assert!(
+        spec.args
+            .iter()
+            .any(|arg| arg == "UITests/SmokeTests/testLaunch")
+    );
+    assert!(spec.args.iter().any(|arg| arg == "-skip-testing"));
+    assert!(
+        spec.args
+            .iter()
+            .any(|arg| arg == "UITests/SmokeTests/testSlow")
+    );
+    assert_eq!(spec.args.last(), Some(&"test".to_string()));
 }
