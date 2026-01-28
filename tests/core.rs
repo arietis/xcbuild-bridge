@@ -182,6 +182,7 @@ fn test_sim_requires_required_fields() {
         use_latest_os: None,
         only_testing: None,
         skip_testing: None,
+        test_runner_env: None,
     };
 
     let err = test_sim_from_input(input, &defaults).unwrap_err();
@@ -213,6 +214,7 @@ fn test_sim_merges_defaults_and_sets_fallbacks() {
         use_latest_os: None,
         only_testing: None,
         skip_testing: None,
+        test_runner_env: None,
     };
 
     let params = test_sim_from_input(input, &defaults).unwrap();
@@ -240,6 +242,7 @@ fn test_sim_command_includes_only_and_skip_testing() {
         use_latest_os: None,
         only_testing: Some(vec!["UITests/SmokeTests/testLaunch".to_string()]),
         skip_testing: Some(vec!["UITests/SmokeTests/testSlow".to_string()]),
+        test_runner_env: None,
     };
 
     let params = test_sim_from_input(input, &defaults).unwrap();
@@ -257,4 +260,38 @@ fn test_sim_command_includes_only_and_skip_testing() {
             .any(|arg| arg == "UITests/SmokeTests/testSlow")
     );
     assert_eq!(spec.args.last(), Some(&"test".to_string()));
+}
+
+#[test]
+fn test_sim_command_prefixes_test_runner_env() {
+    let defaults = SessionDefaults {
+        workspace_path: Some("App.xcworkspace".to_string()),
+        scheme: Some("App".to_string()),
+        simulator_id: Some("SIM-UUID".to_string()),
+        ..SessionDefaults::default()
+    };
+    let mut env = std::collections::HashMap::new();
+    env.insert("FOO".to_string(), "bar".to_string());
+    env.insert("TEST_RUNNER_BAZ".to_string(), "qux".to_string());
+    let input = TestSimParamsInput {
+        project_path: None,
+        workspace_path: None,
+        scheme: None,
+        configuration: None,
+        simulator_id: None,
+        simulator_name: None,
+        derived_data_path: None,
+        extra_args: None,
+        use_latest_os: None,
+        only_testing: None,
+        skip_testing: None,
+        test_runner_env: Some(env),
+    };
+
+    let params = test_sim_from_input(input, &defaults).unwrap();
+    let spec = test_sim_command(&params);
+    let env = spec.env.expect("env should be set");
+    assert_eq!(env.get("TEST_RUNNER_FOO"), Some(&"bar".to_string()));
+    assert_eq!(env.get("TEST_RUNNER_BAZ"), Some(&"qux".to_string()));
+    assert!(!env.contains_key("FOO"));
 }

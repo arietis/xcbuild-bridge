@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::io;
 use std::path::PathBuf;
 
@@ -6,6 +7,7 @@ pub struct CommandSpec {
     pub program: String,
     pub args: Vec<String>,
     pub cwd: Option<PathBuf>,
+    pub env: Option<HashMap<String, String>>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -28,6 +30,9 @@ impl Runner for OsRunner {
         cmd.args(&spec.args);
         if let Some(cwd) = &spec.cwd {
             cmd.current_dir(cwd);
+        }
+        if let Some(env) = &spec.env {
+            cmd.envs(env);
         }
         let output = cmd.output()?;
         let terminated_by_signal = output.status.code().is_none();

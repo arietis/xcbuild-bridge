@@ -130,6 +130,7 @@ pub fn build_sim_command(params: &BuildSimParams) -> CommandSpec {
         program: "xcodebuild".to_string(),
         args,
         cwd: None,
+        env: None,
     }
 }
 

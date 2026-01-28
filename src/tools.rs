@@ -142,7 +142,11 @@ pub fn tool_definitions() -> Vec<ToolDefinition> {
                     "derivedDataPath": { "type": "string" },
                     "extraArgs": { "type": "array", "items": { "type": "string" } },
                     "onlyTesting": { "type": "array", "items": { "type": "string" } },
-                    "skipTesting": { "type": "array", "items": { "type": "string" } }
+                    "skipTesting": { "type": "array", "items": { "type": "string" } },
+                    "testRunnerEnv": {
+                        "type": "object",
+                        "additionalProperties": { "type": "string" }
+                    }
                 }
             }),
             annotations: Some(json!({ "destructiveHint": true })),
