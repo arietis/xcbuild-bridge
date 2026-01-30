@@ -1,6 +1,13 @@
+use xcbuild_bridge::build_for_testing_sim::{
+    BuildForTestingSimParamsInput, build_for_testing_sim_command, build_for_testing_sim_from_input,
+};
 use xcbuild_bridge::build_sim::{BuildSimParamsInput, build_sim_command, build_sim_from_input};
 use xcbuild_bridge::session::{SessionDefaults, SessionSetDefaultsParams, SessionStore};
 use xcbuild_bridge::test_sim::{TestSimParamsInput, test_sim_command, test_sim_from_input};
+use xcbuild_bridge::test_without_building_sim::{
+    TestWithoutBuildingSimParamsInput, test_without_building_sim_command,
+    test_without_building_sim_from_input,
+};
 
 #[test]
 fn session_set_defaults_prefers_workspace() {
@@ -168,6 +175,59 @@ fn build_sim_command_uses_simulator_name_and_latest() {
 }
 
 #[test]
+fn build_for_testing_requires_required_fields() {
+    let defaults = SessionDefaults::default();
+    let input = BuildForTestingSimParamsInput {
+        project_path: None,
+        workspace_path: None,
+        scheme: Some("App".to_string()),
+        configuration: None,
+        simulator_id: None,
+        simulator_name: None,
+        derived_data_path: None,
+        extra_args: None,
+        use_latest_os: None,
+        test_plan: None,
+    };
+
+    let err = build_for_testing_sim_from_input(input, &defaults).unwrap_err();
+    assert!(
+        err.contains("projectPath")
+            || err.contains("workspacePath")
+            || err.contains("simulatorId")
+            || err.contains("simulatorName")
+    );
+}
+
+#[test]
+fn build_for_testing_command_has_action() {
+    let defaults = SessionDefaults {
+        workspace_path: Some("App.xcworkspace".to_string()),
+        scheme: Some("App".to_string()),
+        simulator_id: Some("SIM-UUID".to_string()),
+        ..SessionDefaults::default()
+    };
+    let input = BuildForTestingSimParamsInput {
+        project_path: None,
+        workspace_path: None,
+        scheme: None,
+        configuration: None,
+        simulator_id: None,
+        simulator_name: None,
+        derived_data_path: None,
+        extra_args: None,
+        use_latest_os: None,
+        test_plan: Some("SmokePlan".to_string()),
+    };
+
+    let params = build_for_testing_sim_from_input(input, &defaults).unwrap();
+    let spec = build_for_testing_sim_command(&params);
+    assert_eq!(spec.args.last(), Some(&"build-for-testing".to_string()));
+    assert!(spec.args.iter().any(|arg| arg == "-testPlan"));
+    assert!(spec.args.iter().any(|arg| arg == "SmokePlan"));
+}
+
+#[test]
 fn test_sim_requires_required_fields() {
     let defaults = SessionDefaults::default();
     let input = TestSimParamsInput {
@@ -260,6 +320,56 @@ fn test_sim_command_includes_only_and_skip_testing() {
             .any(|arg| arg == "UITests/SmokeTests/testSlow")
     );
     assert_eq!(spec.args.last(), Some(&"test".to_string()));
+}
+
+#[test]
+fn test_without_building_requires_scheme_when_no_xctestrun() {
+    let defaults = SessionDefaults::default();
+    let input = TestWithoutBuildingSimParamsInput {
+        project_path: Some("App.xcodeproj".to_string()),
+        workspace_path: None,
+        scheme: None,
+        configuration: None,
+        simulator_id: Some("SIM-UUID".to_string()),
+        simulator_name: None,
+        derived_data_path: None,
+        extra_args: None,
+        use_latest_os: None,
+        only_testing: None,
+        skip_testing: None,
+        test_plan: None,
+        xctestrun: None,
+        test_runner_env: None,
+    };
+
+    let err = test_without_building_sim_from_input(input, &defaults).unwrap_err();
+    assert!(err.contains("scheme"));
+}
+
+#[test]
+fn test_without_building_allows_xctestrun_without_scheme() {
+    let defaults = SessionDefaults::default();
+    let input = TestWithoutBuildingSimParamsInput {
+        project_path: Some("App.xcodeproj".to_string()),
+        workspace_path: None,
+        scheme: None,
+        configuration: None,
+        simulator_id: Some("SIM-UUID".to_string()),
+        simulator_name: None,
+        derived_data_path: None,
+        extra_args: None,
+        use_latest_os: None,
+        only_testing: None,
+        skip_testing: None,
+        test_plan: None,
+        xctestrun: Some("AppTests.xctestrun".to_string()),
+        test_runner_env: None,
+    };
+
+    let params = test_without_building_sim_from_input(input, &defaults).unwrap();
+    let spec = test_without_building_sim_command(&params, None, false);
+    assert!(spec.args.iter().any(|arg| arg == "-xctestrun"));
+    assert!(spec.args.iter().any(|arg| arg == "AppTests.xctestrun"));
 }
 
 #[test]

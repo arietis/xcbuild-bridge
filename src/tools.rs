@@ -2,12 +2,19 @@ use serde::Serialize;
 use serde_json::{Value, json};
 
 use crate::boot_sim::{BootSimParamsInput, boot_sim_from_input, execute_boot_sim};
+use crate::build_for_testing_sim::{
+    BuildForTestingSimParamsInput, build_for_testing_sim_from_input, execute_build_for_testing_sim,
+};
 use crate::build_sim::{BuildSimParamsInput, build_sim_from_input, execute_build_sim};
 use crate::erase_sims::{EraseSimsParamsInput, erase_sims_from_input, execute_erase_sims};
 use crate::exec::Runner;
 use crate::list_sims::{ListSimsParams, execute_list_sims};
 use crate::session::{SessionClearDefaultsParams, SessionSetDefaultsParams, SessionStore};
 use crate::test_sim::{TestSimParamsInput, execute_test_sim, test_sim_from_input};
+use crate::test_without_building_sim::{
+    TestWithoutBuildingSimParamsInput, execute_test_without_building_sim,
+    test_without_building_sim_from_input,
+};
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -180,6 +187,43 @@ pub fn tool_definitions() -> Vec<ToolDefinition> {
             annotations: Some(json!({ "destructiveHint": true })),
         },
         ToolDefinition {
+            name: "build_for_testing_sim",
+            title: "Build for Testing (Simulator)",
+            description: "Builds test artifacts for an iOS simulator.",
+            input_schema: json!({
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                    "derivedDataPath": { "type": "string" },
+                    "extraArgs": { "type": "array", "items": { "type": "string" } },
+                    "testPlan": { "type": "string" }
+                }
+            }),
+            annotations: Some(json!({ "destructiveHint": true })),
+        },
+        ToolDefinition {
+            name: "test_without_building_sim",
+            title: "Test Without Building (Simulator)",
+            description: "Runs tests for an iOS simulator without rebuilding.",
+            input_schema: json!({
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                    "derivedDataPath": { "type": "string" },
+                    "extraArgs": { "type": "array", "items": { "type": "string" } },
+                    "onlyTesting": { "type": "array", "items": { "type": "string" } },
+                    "skipTesting": { "type": "array", "items": { "type": "string" } },
+                    "testPlan": { "type": "string" },
+                    "xctestrun": { "type": "string" },
+                    "testRunnerEnv": {
+                        "type": "object",
+                        "additionalProperties": { "type": "string" }
+                    }
+                }
+            }),
+            annotations: Some(json!({ "destructiveHint": true })),
+        },
+        ToolDefinition {
             name: "test_sim",
             title: "Test Simulator",
             description: "Runs tests for an iOS simulator target.",
@@ -330,6 +374,48 @@ pub fn call_tool(
                 }
             };
             Ok(execute_build_sim(merged, runner))
+        }
+        "build_for_testing_sim" => {
+            let params: BuildForTestingSimParamsInput = match serde_json::from_value(args) {
+                Ok(params) => params,
+                Err(err) => {
+                    return Ok(ToolResponse::error(
+                        "Parameter validation failed".to_string(),
+                        Some(err.to_string()),
+                    ));
+                }
+            };
+            let merged = match build_for_testing_sim_from_input(params, &session.get_all()) {
+                Ok(merged) => merged,
+                Err(err) => {
+                    return Ok(ToolResponse::error(
+                        "Parameter validation failed".to_string(),
+                        Some(err),
+                    ));
+                }
+            };
+            Ok(execute_build_for_testing_sim(merged, runner))
+        }
+        "test_without_building_sim" => {
+            let params: TestWithoutBuildingSimParamsInput = match serde_json::from_value(args) {
+                Ok(params) => params,
+                Err(err) => {
+                    return Ok(ToolResponse::error(
+                        "Parameter validation failed".to_string(),
+                        Some(err.to_string()),
+                    ));
+                }
+            };
+            let merged = match test_without_building_sim_from_input(params, &session.get_all()) {
+                Ok(merged) => merged,
+                Err(err) => {
+                    return Ok(ToolResponse::error(
+                        "Parameter validation failed".to_string(),
+                        Some(err),
+                    ));
+                }
+            };
+            Ok(execute_test_without_building_sim(merged, runner))
         }
         "test_sim" => {
             let params: TestSimParamsInput = match serde_json::from_value(args) {

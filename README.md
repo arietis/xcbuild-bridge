@@ -37,4 +37,6 @@ args = []
 - `boot_sim`
 - `erase_sims`
 - `build_sim`
+- `build_for_testing_sim`
+- `test_without_building_sim`
 - `test_sim`

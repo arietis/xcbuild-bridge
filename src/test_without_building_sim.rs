@@ -12,7 +12,7 @@ use crate::tools::ToolResponse;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct TestSimParamsInput {
+pub struct TestWithoutBuildingSimParamsInput {
     pub project_path: Option<String>,
     pub workspace_path: Option<String>,
     pub scheme: Option<String>,
@@ -24,14 +24,16 @@ pub struct TestSimParamsInput {
     pub use_latest_os: Option<bool>,
     pub only_testing: Option<Vec<String>>,
     pub skip_testing: Option<Vec<String>>,
+    pub test_plan: Option<String>,
+    pub xctestrun: Option<String>,
     pub test_runner_env: Option<HashMap<String, String>>,
 }
 
 #[derive(Debug, Clone)]
-pub struct TestSimParams {
+pub struct TestWithoutBuildingSimParams {
     pub project_path: Option<String>,
     pub workspace_path: Option<String>,
-    pub scheme: String,
+    pub scheme: Option<String>,
     pub configuration: String,
     pub simulator_id: Option<String>,
     pub simulator_name: Option<String>,
@@ -40,13 +42,15 @@ pub struct TestSimParams {
     pub use_latest_os: bool,
     pub only_testing: Vec<String>,
     pub skip_testing: Vec<String>,
+    pub test_plan: Option<String>,
+    pub xctestrun: Option<String>,
     pub test_runner_env: Option<HashMap<String, String>>,
 }
 
-pub fn test_sim_from_input(
-    input: TestSimParamsInput,
+pub fn test_without_building_sim_from_input(
+    input: TestWithoutBuildingSimParamsInput,
     defaults: &SessionDefaults,
-) -> Result<TestSimParams, String> {
+) -> Result<TestWithoutBuildingSimParams, String> {
     let project_path = normalize_opt(input.project_path).or_else(|| defaults.project_path.clone());
     let workspace_path =
         normalize_opt(input.workspace_path).or_else(|| defaults.workspace_path.clone());
@@ -65,9 +69,13 @@ pub fn test_sim_from_input(
         .unwrap_or(true);
     let only_testing = normalize_vec(input.only_testing);
     let skip_testing = normalize_vec(input.skip_testing);
+    let test_plan = normalize_opt(input.test_plan);
+    let xctestrun = normalize_opt(input.xctestrun);
     let test_runner_env = normalize_env(input.test_runner_env);
 
-    let scheme = scheme.ok_or_else(|| "scheme is required".to_string())?;
+    if scheme.is_none() && xctestrun.is_none() {
+        return Err("scheme is required unless xctestrun is provided.".to_string());
+    }
 
     if project_path.is_none() && workspace_path.is_none() {
         return Err("Either projectPath or workspacePath is required.".to_string());
@@ -82,7 +90,7 @@ pub fn test_sim_from_input(
         return Err("simulatorId and simulatorName are mutually exclusive.".to_string());
     }
 
-    Ok(TestSimParams {
+    Ok(TestWithoutBuildingSimParams {
         project_path,
         workspace_path,
         scheme,
@@ -94,16 +102,14 @@ pub fn test_sim_from_input(
         use_latest_os,
         only_testing,
         skip_testing,
+        test_plan,
+        xctestrun,
         test_runner_env,
     })
 }
 
-pub fn test_sim_command(params: &TestSimParams) -> CommandSpec {
-    build_test_sim_command(params, None, false)
-}
-
-fn build_test_sim_command(
-    params: &TestSimParams,
+pub fn test_without_building_sim_command(
+    params: &TestWithoutBuildingSimParams,
     result_bundle_path: Option<&Path>,
     include_result_bundle: bool,
 ) -> CommandSpec {
@@ -117,8 +123,10 @@ fn build_test_sim_command(
         args.push(project.clone());
     }
 
-    args.push("-scheme".to_string());
-    args.push(params.scheme.clone());
+    if let Some(scheme) = &params.scheme {
+        args.push("-scheme".to_string());
+        args.push(scheme.clone());
+    }
 
     args.push("-configuration".to_string());
     args.push(params.configuration.clone());
@@ -145,6 +153,16 @@ fn build_test_sim_command(
         args.push(derived_data_path.clone());
     }
 
+    if let Some(test_plan) = &params.test_plan {
+        args.push("-testPlan".to_string());
+        args.push(test_plan.clone());
+    }
+
+    if let Some(xctestrun) = &params.xctestrun {
+        args.push("-xctestrun".to_string());
+        args.push(xctestrun.clone());
+    }
+
     if include_result_bundle && let Some(result_bundle_path) = result_bundle_path {
         args.push("-resultBundlePath".to_string());
         args.push(result_bundle_path.to_string_lossy().to_string());
@@ -161,7 +179,7 @@ fn build_test_sim_command(
     }
 
     args.extend(params.extra_args.clone());
-    args.push("test".to_string());
+    args.push("test-without-building".to_string());
 
     let env = params.test_runner_env.as_ref().map(prefix_test_runner_env);
 
@@ -173,7 +191,10 @@ fn build_test_sim_command(
     }
 }
 
-pub fn execute_test_sim(params: TestSimParams, runner: &impl Runner) -> ToolResponse {
+pub fn execute_test_without_building_sim(
+    params: TestWithoutBuildingSimParams,
+    runner: &impl Runner,
+) -> ToolResponse {
     let result_bundle = match resolve_result_bundle(&params.extra_args) {
         Ok(bundle) => bundle,
         Err(err) => {
@@ -187,7 +208,8 @@ pub fn execute_test_sim(params: TestSimParams, runner: &impl Runner) -> ToolResp
     let result_bundle_path = result_bundle.path();
     let include_result_bundle = result_bundle.include_in_command();
 
-    let spec = build_test_sim_command(&params, Some(result_bundle_path), include_result_bundle);
+    let spec =
+        test_without_building_sim_command(&params, Some(result_bundle_path), include_result_bundle);
     let output = match runner.run(&spec) {
         Ok(output) => output,
         Err(err) => {
@@ -233,14 +255,13 @@ fn normalize_vec(values: Option<Vec<String>>) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::PathBuf;
 
     #[test]
-    fn build_test_sim_command_includes_result_bundle_path() {
-        let params = TestSimParams {
+    fn test_without_building_command_includes_xctestrun() {
+        let params = TestWithoutBuildingSimParams {
             project_path: Some("App.xcodeproj".to_string()),
             workspace_path: None,
-            scheme: "App".to_string(),
+            scheme: Some("App".to_string()),
             configuration: "Debug".to_string(),
             simulator_id: Some("SIM-UUID".to_string()),
             simulator_name: None,
@@ -249,16 +270,14 @@ mod tests {
             use_latest_os: true,
             only_testing: Vec::new(),
             skip_testing: Vec::new(),
+            test_plan: None,
+            xctestrun: Some("AppTests.xctestrun".to_string()),
             test_runner_env: None,
         };
 
-        let path = PathBuf::from("/tmp/TestResults.xcresult");
-        let spec = build_test_sim_command(&params, Some(&path), true);
-        assert!(spec.args.iter().any(|arg| arg == "-resultBundlePath"));
-        assert!(
-            spec.args
-                .iter()
-                .any(|arg| arg == "/tmp/TestResults.xcresult")
-        );
+        let spec = test_without_building_sim_command(&params, None, false);
+        assert!(spec.args.iter().any(|arg| arg == "-xctestrun"));
+        assert!(spec.args.iter().any(|arg| arg == "AppTests.xctestrun"));
+        assert_eq!(spec.args.last(), Some(&"test-without-building".to_string()));
     }
 }
