@@ -1,8 +1,11 @@
 use serde::Serialize;
 use serde_json::{Value, json};
 
+use crate::boot_sim::{BootSimParamsInput, boot_sim_from_input, execute_boot_sim};
 use crate::build_sim::{BuildSimParamsInput, build_sim_from_input, execute_build_sim};
+use crate::erase_sims::{EraseSimsParamsInput, erase_sims_from_input, execute_erase_sims};
 use crate::exec::Runner;
+use crate::list_sims::{ListSimsParams, execute_list_sims};
 use crate::session::{SessionClearDefaultsParams, SessionSetDefaultsParams, SessionStore};
 use crate::test_sim::{TestSimParamsInput, execute_test_sim, test_sim_from_input};
 
@@ -117,6 +120,51 @@ pub fn tool_definitions() -> Vec<ToolDefinition> {
             annotations: Some(json!({ "destructiveHint": true })),
         },
         ToolDefinition {
+            name: "list_sims",
+            title: "List Simulators",
+            description: "Lists available iOS simulators with their UUIDs.",
+            input_schema: json!({
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                    "availableOnly": { "type": "boolean" }
+                }
+            }),
+            annotations: Some(json!({ "readOnlyHint": true })),
+        },
+        ToolDefinition {
+            name: "boot_sim",
+            title: "Boot Simulator",
+            description: "Boots an iOS simulator and optionally waits for boot completion.",
+            input_schema: json!({
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                    "simulatorId": { "type": "string" },
+                    "simulatorName": { "type": "string" },
+                    "useLatestOS": { "type": "boolean" },
+                    "waitForBoot": { "type": "boolean" }
+                }
+            }),
+            annotations: Some(json!({ "destructiveHint": true })),
+        },
+        ToolDefinition {
+            name: "erase_sims",
+            title: "Erase Simulator",
+            description: "Erases a simulator by UDID (or name).",
+            input_schema: json!({
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                    "simulatorId": { "type": "string" },
+                    "simulatorName": { "type": "string" },
+                    "useLatestOS": { "type": "boolean" },
+                    "shutdownFirst": { "type": "boolean" }
+                }
+            }),
+            annotations: Some(json!({ "destructiveHint": true })),
+        },
+        ToolDefinition {
             name: "build_sim",
             title: "Build Simulator",
             description: "Builds an app for an iOS simulator.",
@@ -207,6 +255,60 @@ pub fn call_tool(
                 "Session defaults cleared".to_string(),
                 true,
             ))
+        }
+        "list_sims" => {
+            let params: ListSimsParams = match serde_json::from_value(args) {
+                Ok(params) => params,
+                Err(err) => {
+                    return Ok(ToolResponse::error(
+                        "Parameter validation failed".to_string(),
+                        Some(err.to_string()),
+                    ));
+                }
+            };
+            Ok(execute_list_sims(params, runner))
+        }
+        "boot_sim" => {
+            let params: BootSimParamsInput = match serde_json::from_value(args) {
+                Ok(params) => params,
+                Err(err) => {
+                    return Ok(ToolResponse::error(
+                        "Parameter validation failed".to_string(),
+                        Some(err.to_string()),
+                    ));
+                }
+            };
+            let merged = match boot_sim_from_input(params, &session.get_all()) {
+                Ok(merged) => merged,
+                Err(err) => {
+                    return Ok(ToolResponse::error(
+                        "Parameter validation failed".to_string(),
+                        Some(err),
+                    ));
+                }
+            };
+            Ok(execute_boot_sim(merged, runner))
+        }
+        "erase_sims" => {
+            let params: EraseSimsParamsInput = match serde_json::from_value(args) {
+                Ok(params) => params,
+                Err(err) => {
+                    return Ok(ToolResponse::error(
+                        "Parameter validation failed".to_string(),
+                        Some(err.to_string()),
+                    ));
+                }
+            };
+            let merged = match erase_sims_from_input(params, &session.get_all()) {
+                Ok(merged) => merged,
+                Err(err) => {
+                    return Ok(ToolResponse::error(
+                        "Parameter validation failed".to_string(),
+                        Some(err),
+                    ));
+                }
+            };
+            Ok(execute_erase_sims(merged, runner))
         }
         "build_sim" => {
             let params: BuildSimParamsInput = match serde_json::from_value(args) {
