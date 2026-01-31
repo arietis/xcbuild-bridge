@@ -1,6 +1,7 @@
 pub mod boot_sim;
 pub mod build_for_testing_sim;
 pub mod build_sim;
+pub mod discover_xctestrun;
 pub mod erase_sims;
 pub mod exec;
 pub mod list_sims;

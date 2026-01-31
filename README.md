@@ -39,5 +39,6 @@ args = []
 - `build_sim`
 - `build_for_testing_sim`
 - `test_without_building_sim`
+- `discover_xctestrun`
 - `smoke_sim`
 - `test_sim`

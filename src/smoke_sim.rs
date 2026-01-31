@@ -2,6 +2,7 @@ use serde::Deserialize;
 use std::collections::HashMap;
 
 use crate::build_for_testing_sim::{BuildForTestingSimParams, execute_build_for_testing_sim};
+use crate::discover_xctestrun::discover_xctestrun_path;
 use crate::session::SessionDefaults;
 use crate::simctl::{boot_simulator, resolve_simulator_id};
 use crate::test_support::normalize_env;
@@ -98,12 +99,6 @@ pub fn smoke_sim_from_input(
     if !skip_build && scheme.is_none() {
         return Err("scheme is required when skipBuild is false.".to_string());
     }
-    if skip_build && scheme.is_none() && xctestrun.is_none() {
-        return Err(
-            "xctestrun is required when skipBuild is true and scheme is missing.".to_string(),
-        );
-    }
-
     Ok(SmokeSimParams {
         project_path,
         workspace_path,
@@ -148,6 +143,30 @@ pub fn execute_smoke_sim(
     }
 
     let mut sections = Vec::new();
+    let mut resolved_xctestrun = params.xctestrun.clone();
+    let mut discovery_error = None;
+
+    if resolved_xctestrun.is_none() {
+        match discover_xctestrun_path(
+            params.derived_data_path.as_deref(),
+            params.scheme.as_deref(),
+            params.test_plan.as_deref(),
+        ) {
+            Ok(path) => {
+                resolved_xctestrun = Some(path.to_string_lossy().to_string());
+            }
+            Err(err) => {
+                discovery_error = Some(err);
+            }
+        }
+    }
+
+    if params.skip_build && params.scheme.is_none() && resolved_xctestrun.is_none() {
+        return ToolResponse::error(
+            "xctestrun is required when skipBuild is true and scheme is missing.".to_string(),
+            discovery_error,
+        );
+    }
 
     if !params.skip_build {
         let build_params = BuildForTestingSimParams {
@@ -182,7 +201,7 @@ pub fn execute_smoke_sim(
         only_testing: params.only_testing.clone(),
         skip_testing: params.skip_testing.clone(),
         test_plan: params.test_plan.clone(),
-        xctestrun: params.xctestrun.clone(),
+        xctestrun: resolved_xctestrun,
         test_runner_env: params.test_runner_env.clone(),
     };
     let test_response = execute_test_without_building_sim(test_params, runner);
@@ -277,6 +296,33 @@ mod tests {
             skip_testing: None,
             test_plan: None,
             xctestrun: Some("AppTests.xctestrun".to_string()),
+            test_runner_env: None,
+            boot_sim: None,
+            wait_for_boot: None,
+            skip_build: Some(true),
+        };
+
+        let params = smoke_sim_from_input(input, &defaults).expect("valid");
+        assert!(params.skip_build);
+    }
+
+    #[test]
+    fn smoke_sim_allows_skip_build_without_xctestrun() {
+        let defaults = SessionDefaults::default();
+        let input = SmokeSimParamsInput {
+            project_path: Some("App.xcodeproj".to_string()),
+            workspace_path: None,
+            scheme: None,
+            configuration: None,
+            simulator_id: Some("SIM-UUID".to_string()),
+            simulator_name: None,
+            derived_data_path: None,
+            extra_args: None,
+            use_latest_os: None,
+            only_testing: None,
+            skip_testing: None,
+            test_plan: None,
+            xctestrun: None,
             test_runner_env: None,
             boot_sim: None,
             wait_for_boot: None,

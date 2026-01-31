@@ -428,6 +428,33 @@ fn smoke_sim_allows_skip_build_with_xctestrun() {
 }
 
 #[test]
+fn smoke_sim_allows_skip_build_without_xctestrun() {
+    let defaults = SessionDefaults::default();
+    let input = SmokeSimParamsInput {
+        project_path: Some("App.xcodeproj".to_string()),
+        workspace_path: None,
+        scheme: None,
+        configuration: None,
+        simulator_id: Some("SIM-UUID".to_string()),
+        simulator_name: None,
+        derived_data_path: None,
+        extra_args: None,
+        use_latest_os: None,
+        only_testing: None,
+        skip_testing: None,
+        test_plan: None,
+        xctestrun: None,
+        test_runner_env: None,
+        boot_sim: None,
+        wait_for_boot: None,
+        skip_build: Some(true),
+    };
+
+    let params = smoke_sim_from_input(input, &defaults).unwrap();
+    assert!(params.skip_build);
+}
+
+#[test]
 fn test_sim_command_prefixes_test_runner_env() {
     let defaults = SessionDefaults {
         workspace_path: Some("App.xcworkspace".to_string()),

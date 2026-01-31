@@ -6,6 +6,7 @@ use crate::build_for_testing_sim::{
     BuildForTestingSimParamsInput, build_for_testing_sim_from_input, execute_build_for_testing_sim,
 };
 use crate::build_sim::{BuildSimParamsInput, build_sim_from_input, execute_build_sim};
+use crate::discover_xctestrun::{DiscoverXctestrunParamsInput, execute_discover_xctestrun};
 use crate::erase_sims::{EraseSimsParamsInput, erase_sims_from_input, execute_erase_sims};
 use crate::exec::Runner;
 use crate::list_sims::{ListSimsParams, execute_list_sims};
@@ -225,6 +226,21 @@ pub fn tool_definitions() -> Vec<ToolDefinition> {
             annotations: Some(json!({ "destructiveHint": true })),
         },
         ToolDefinition {
+            name: "discover_xctestrun",
+            title: "Discover Xctestrun",
+            description: "Finds the best matching .xctestrun file under DerivedData.",
+            input_schema: json!({
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                    "derivedDataPath": { "type": "string" },
+                    "scheme": { "type": "string" },
+                    "testPlan": { "type": "string" }
+                }
+            }),
+            annotations: Some(json!({ "readOnlyHint": true })),
+        },
+        ToolDefinition {
             name: "smoke_sim",
             title: "Smoke Test (Simulator)",
             description: "Runs a smoke test flow (build-for-testing + test-without-building).",
@@ -442,6 +458,18 @@ pub fn call_tool(
                 }
             };
             Ok(execute_test_without_building_sim(merged, runner))
+        }
+        "discover_xctestrun" => {
+            let params: DiscoverXctestrunParamsInput = match serde_json::from_value(args) {
+                Ok(params) => params,
+                Err(err) => {
+                    return Ok(ToolResponse::error(
+                        "Parameter validation failed".to_string(),
+                        Some(err.to_string()),
+                    ));
+                }
+            };
+            Ok(execute_discover_xctestrun(params))
         }
         "smoke_sim" => {
             let params: SmokeSimParamsInput = match serde_json::from_value(args) {
