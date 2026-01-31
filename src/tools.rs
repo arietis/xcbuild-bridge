@@ -6,9 +6,11 @@ use crate::build_for_testing_sim::{
     BuildForTestingSimParamsInput, build_for_testing_sim_from_input, execute_build_for_testing_sim,
 };
 use crate::build_sim::{BuildSimParamsInput, build_sim_from_input, execute_build_sim};
+use crate::discover_projs::{DiscoverProjsParamsInput, execute_discover_projs};
 use crate::discover_xctestrun::{DiscoverXctestrunParamsInput, execute_discover_xctestrun};
 use crate::erase_sims::{EraseSimsParamsInput, erase_sims_from_input, execute_erase_sims};
 use crate::exec::Runner;
+use crate::list_schemes::{ListSchemesParamsInput, execute_list_schemes, list_schemes_from_input};
 use crate::list_sims::{ListSimsParams, execute_list_sims};
 use crate::session::{SessionClearDefaultsParams, SessionSetDefaultsParams, SessionStore};
 use crate::smoke_sim::{SmokeSimParamsInput, execute_smoke_sim, smoke_sim_from_input};
@@ -137,6 +139,36 @@ pub fn tool_definitions() -> Vec<ToolDefinition> {
                 "additionalProperties": false,
                 "properties": {
                     "availableOnly": { "type": "boolean" }
+                }
+            }),
+            annotations: Some(json!({ "readOnlyHint": true })),
+        },
+        ToolDefinition {
+            name: "discover_projs",
+            title: "Discover Projects",
+            description: "Scans a directory (defaults to workspace root) to find Xcode project (.xcodeproj) and workspace (.xcworkspace) files.",
+            input_schema: json!({
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                    "workspaceRoot": { "type": "string" },
+                    "scanPath": { "type": "string" },
+                    "maxDepth": { "type": "integer", "minimum": 0 }
+                },
+                "required": ["workspaceRoot"]
+            }),
+            annotations: Some(json!({ "readOnlyHint": true })),
+        },
+        ToolDefinition {
+            name: "list_schemes",
+            title: "List Schemes",
+            description: "Lists schemes for a project or workspace.",
+            input_schema: json!({
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                    "projectPath": { "type": "string" },
+                    "workspacePath": { "type": "string" }
                 }
             }),
             annotations: Some(json!({ "readOnlyHint": true })),
@@ -353,6 +385,39 @@ pub fn call_tool(
                 }
             };
             Ok(execute_list_sims(params, runner))
+        }
+        "discover_projs" => {
+            let params: DiscoverProjsParamsInput = match serde_json::from_value(args) {
+                Ok(params) => params,
+                Err(err) => {
+                    return Ok(ToolResponse::error(
+                        "Parameter validation failed".to_string(),
+                        Some(err.to_string()),
+                    ));
+                }
+            };
+            Ok(execute_discover_projs(params))
+        }
+        "list_schemes" => {
+            let params: ListSchemesParamsInput = match serde_json::from_value(args) {
+                Ok(params) => params,
+                Err(err) => {
+                    return Ok(ToolResponse::error(
+                        "Parameter validation failed".to_string(),
+                        Some(err.to_string()),
+                    ));
+                }
+            };
+            let merged = match list_schemes_from_input(params, &session.get_all()) {
+                Ok(merged) => merged,
+                Err(err) => {
+                    return Ok(ToolResponse::error(
+                        "Parameter validation failed".to_string(),
+                        Some(err),
+                    ));
+                }
+            };
+            Ok(execute_list_schemes(merged, runner))
         }
         "boot_sim" => {
             let params: BootSimParamsInput = match serde_json::from_value(args) {

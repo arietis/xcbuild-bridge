@@ -34,6 +34,8 @@ args = []
 - `session-show-defaults`
 - `session-clear-defaults`
 - `list_sims`
+- `discover_projs`
+- `list_schemes`
 - `boot_sim`
 - `erase_sims`
 - `build_sim`
