@@ -3,6 +3,7 @@ use xcbuild_bridge::build_for_testing_sim::{
 };
 use xcbuild_bridge::build_sim::{BuildSimParamsInput, build_sim_command, build_sim_from_input};
 use xcbuild_bridge::session::{SessionDefaults, SessionSetDefaultsParams, SessionStore};
+use xcbuild_bridge::smoke_sim::{SmokeSimParamsInput, smoke_sim_from_input};
 use xcbuild_bridge::test_sim::{TestSimParamsInput, test_sim_command, test_sim_from_input};
 use xcbuild_bridge::test_without_building_sim::{
     TestWithoutBuildingSimParamsInput, test_without_building_sim_command,
@@ -370,6 +371,60 @@ fn test_without_building_allows_xctestrun_without_scheme() {
     let spec = test_without_building_sim_command(&params, None, false);
     assert!(spec.args.iter().any(|arg| arg == "-xctestrun"));
     assert!(spec.args.iter().any(|arg| arg == "AppTests.xctestrun"));
+}
+
+#[test]
+fn smoke_sim_requires_scheme_when_building() {
+    let defaults = SessionDefaults::default();
+    let input = SmokeSimParamsInput {
+        project_path: Some("App.xcodeproj".to_string()),
+        workspace_path: None,
+        scheme: None,
+        configuration: None,
+        simulator_id: Some("SIM-UUID".to_string()),
+        simulator_name: None,
+        derived_data_path: None,
+        extra_args: None,
+        use_latest_os: None,
+        only_testing: None,
+        skip_testing: None,
+        test_plan: None,
+        xctestrun: None,
+        test_runner_env: None,
+        boot_sim: None,
+        wait_for_boot: None,
+        skip_build: Some(false),
+    };
+
+    let err = smoke_sim_from_input(input, &defaults).unwrap_err();
+    assert!(err.contains("scheme"));
+}
+
+#[test]
+fn smoke_sim_allows_skip_build_with_xctestrun() {
+    let defaults = SessionDefaults::default();
+    let input = SmokeSimParamsInput {
+        project_path: Some("App.xcodeproj".to_string()),
+        workspace_path: None,
+        scheme: None,
+        configuration: None,
+        simulator_id: Some("SIM-UUID".to_string()),
+        simulator_name: None,
+        derived_data_path: None,
+        extra_args: None,
+        use_latest_os: None,
+        only_testing: None,
+        skip_testing: None,
+        test_plan: None,
+        xctestrun: Some("AppTests.xctestrun".to_string()),
+        test_runner_env: None,
+        boot_sim: None,
+        wait_for_boot: None,
+        skip_build: Some(true),
+    };
+
+    let params = smoke_sim_from_input(input, &defaults).unwrap();
+    assert!(params.skip_build);
 }
 
 #[test]

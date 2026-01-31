@@ -10,6 +10,7 @@ use crate::erase_sims::{EraseSimsParamsInput, erase_sims_from_input, execute_era
 use crate::exec::Runner;
 use crate::list_sims::{ListSimsParams, execute_list_sims};
 use crate::session::{SessionClearDefaultsParams, SessionSetDefaultsParams, SessionStore};
+use crate::smoke_sim::{SmokeSimParamsInput, execute_smoke_sim, smoke_sim_from_input};
 use crate::test_sim::{TestSimParamsInput, execute_test_sim, test_sim_from_input};
 use crate::test_without_building_sim::{
     TestWithoutBuildingSimParamsInput, execute_test_without_building_sim,
@@ -224,6 +225,31 @@ pub fn tool_definitions() -> Vec<ToolDefinition> {
             annotations: Some(json!({ "destructiveHint": true })),
         },
         ToolDefinition {
+            name: "smoke_sim",
+            title: "Smoke Test (Simulator)",
+            description: "Runs a smoke test flow (build-for-testing + test-without-building).",
+            input_schema: json!({
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                    "derivedDataPath": { "type": "string" },
+                    "extraArgs": { "type": "array", "items": { "type": "string" } },
+                    "onlyTesting": { "type": "array", "items": { "type": "string" } },
+                    "skipTesting": { "type": "array", "items": { "type": "string" } },
+                    "testPlan": { "type": "string" },
+                    "xctestrun": { "type": "string" },
+                    "testRunnerEnv": {
+                        "type": "object",
+                        "additionalProperties": { "type": "string" }
+                    },
+                    "bootSim": { "type": "boolean" },
+                    "waitForBoot": { "type": "boolean" },
+                    "skipBuild": { "type": "boolean" }
+                }
+            }),
+            annotations: Some(json!({ "destructiveHint": true })),
+        },
+        ToolDefinition {
             name: "test_sim",
             title: "Test Simulator",
             description: "Runs tests for an iOS simulator target.",
@@ -416,6 +442,27 @@ pub fn call_tool(
                 }
             };
             Ok(execute_test_without_building_sim(merged, runner))
+        }
+        "smoke_sim" => {
+            let params: SmokeSimParamsInput = match serde_json::from_value(args) {
+                Ok(params) => params,
+                Err(err) => {
+                    return Ok(ToolResponse::error(
+                        "Parameter validation failed".to_string(),
+                        Some(err.to_string()),
+                    ));
+                }
+            };
+            let merged = match smoke_sim_from_input(params, &session.get_all()) {
+                Ok(merged) => merged,
+                Err(err) => {
+                    return Ok(ToolResponse::error(
+                        "Parameter validation failed".to_string(),
+                        Some(err),
+                    ));
+                }
+            };
+            Ok(execute_smoke_sim(merged, runner))
         }
         "test_sim" => {
             let params: TestSimParamsInput = match serde_json::from_value(args) {

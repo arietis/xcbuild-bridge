@@ -112,6 +112,50 @@ pub fn resolve_simulator_id(
     Ok(matches.first().expect("matches not empty").udid.clone())
 }
 
+pub fn boot_simulator(
+    simulator_id: &str,
+    wait_for_boot: bool,
+    runner: &impl Runner,
+) -> Result<(), String> {
+    let boot_spec = CommandSpec {
+        program: "xcrun".to_string(),
+        args: vec![
+            "simctl".to_string(),
+            "boot".to_string(),
+            simulator_id.to_string(),
+        ],
+        cwd: None,
+        env: None,
+    };
+    let boot_output = runner.run(&boot_spec).map_err(|err| err.to_string())?;
+    if boot_output.exit_code != 0 && !is_already_booted(&boot_output) {
+        return Err(format_command_output("simctl boot failed", &boot_output));
+    }
+
+    if wait_for_boot {
+        let wait_spec = CommandSpec {
+            program: "xcrun".to_string(),
+            args: vec![
+                "simctl".to_string(),
+                "bootstatus".to_string(),
+                simulator_id.to_string(),
+                "-b".to_string(),
+            ],
+            cwd: None,
+            env: None,
+        };
+        let wait_output = runner.run(&wait_spec).map_err(|err| err.to_string())?;
+        if wait_output.exit_code != 0 {
+            return Err(format_command_output(
+                "simctl bootstatus failed",
+                &wait_output,
+            ));
+        }
+    }
+
+    Ok(())
+}
+
 fn compare_runtime_versions(a: &str, b: &str) -> Ordering {
     let a_parts = parse_runtime_version(a);
     let b_parts = parse_runtime_version(b);
@@ -152,6 +196,28 @@ fn render_error(prefix: &str, output: &CommandOutput) -> String {
         message.push_str(output.stderr.trim());
     }
     message
+}
+
+fn format_command_output(prefix: &str, output: &CommandOutput) -> String {
+    let mut message = format!("{} (code {})", prefix, output.exit_code);
+    if !output.stdout.trim().is_empty() {
+        message.push_str("\nSTDOUT:\n");
+        message.push_str(output.stdout.trim());
+    }
+    if !output.stderr.trim().is_empty() {
+        message.push_str("\nSTDERR:\n");
+        message.push_str(output.stderr.trim());
+    }
+    message
+}
+
+fn is_already_booted(output: &CommandOutput) -> bool {
+    let mut combined = output.stdout.clone();
+    combined.push('\n');
+    combined.push_str(&output.stderr);
+    let combined = combined.to_lowercase();
+    combined.contains("already booted")
+        || (combined.contains("booted") && combined.contains("current state"))
 }
 
 #[cfg(test)]
