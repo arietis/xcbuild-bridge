@@ -38,6 +38,7 @@ args = []
 - `list_schemes`
 - `get_app_bundle_id`
 - `get_sim_app_path`
+- `build_run_sim`
 - `install_app_sim`
 - `launch_app_sim`
 - `boot_sim`

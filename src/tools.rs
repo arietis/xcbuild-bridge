@@ -5,6 +5,7 @@ use crate::boot_sim::{BootSimParamsInput, boot_sim_from_input, execute_boot_sim}
 use crate::build_for_testing_sim::{
     BuildForTestingSimParamsInput, build_for_testing_sim_from_input, execute_build_for_testing_sim,
 };
+use crate::build_run_sim::{BuildRunSimParamsInput, build_run_sim_from_input, execute_build_run_sim};
 use crate::build_sim::{BuildSimParamsInput, build_sim_from_input, execute_build_sim};
 use crate::discover_projs::{DiscoverProjsParamsInput, execute_discover_projs};
 use crate::discover_xctestrun::{DiscoverXctestrunParamsInput, execute_discover_xctestrun};
@@ -296,6 +297,32 @@ pub fn tool_definitions() -> Vec<ToolDefinition> {
                     "derivedDataPath": { "type": "string" },
                     "extraArgs": { "type": "array", "items": { "type": "string" } },
                     "preferXcodebuild": { "type": "boolean" }
+                }
+            }),
+            annotations: Some(json!({ "destructiveHint": true })),
+        },
+        ToolDefinition {
+            name: "build_run_sim",
+            title: "Build Run Simulator",
+            description: "Builds and runs an app on an iOS simulator.",
+            input_schema: json!({
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                    "projectPath": { "type": "string" },
+                    "workspacePath": { "type": "string" },
+                    "scheme": { "type": "string" },
+                    "configuration": { "type": "string" },
+                    "simulatorId": { "type": "string" },
+                    "simulatorName": { "type": "string" },
+                    "derivedDataPath": { "type": "string" },
+                    "extraArgs": { "type": "array", "items": { "type": "string" } },
+                    "useLatestOS": { "type": "boolean" },
+                    "preferXcodebuild": { "type": "boolean" },
+                    "bootSim": { "type": "boolean" },
+                    "waitForBoot": { "type": "boolean" },
+                    "bundleId": { "type": "string" },
+                    "args": { "type": "array", "items": { "type": "string" } }
                 }
             }),
             annotations: Some(json!({ "destructiveHint": true })),
@@ -645,6 +672,27 @@ pub fn call_tool(
                 }
             };
             Ok(execute_build_sim(merged, runner))
+        }
+        "build_run_sim" => {
+            let params: BuildRunSimParamsInput = match serde_json::from_value(args) {
+                Ok(params) => params,
+                Err(err) => {
+                    return Ok(ToolResponse::error(
+                        "Parameter validation failed".to_string(),
+                        Some(err.to_string()),
+                    ));
+                }
+            };
+            let merged = match build_run_sim_from_input(params, &session.get_all()) {
+                Ok(merged) => merged,
+                Err(err) => {
+                    return Ok(ToolResponse::error(
+                        "Parameter validation failed".to_string(),
+                        Some(err),
+                    ));
+                }
+            };
+            Ok(execute_build_run_sim(merged, runner))
         }
         "build_for_testing_sim" => {
             let params: BuildForTestingSimParamsInput = match serde_json::from_value(args) {

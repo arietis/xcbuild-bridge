@@ -1,5 +1,6 @@
 pub mod boot_sim;
 pub mod build_for_testing_sim;
+pub mod build_run_sim;
 pub mod build_sim;
 pub mod discover_projs;
 pub mod discover_xctestrun;
