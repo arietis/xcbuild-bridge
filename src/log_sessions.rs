@@ -6,7 +6,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 #[derive(Debug)]
 pub struct LogSession {
     pub id: String,
-    pub child: Child,
+    pub processes: Vec<Child>,
     pub file_path: PathBuf,
     pub simulator_id: String,
     pub bundle_id: String,
@@ -28,7 +28,7 @@ impl LogSessionStore {
 
     pub fn insert(
         &mut self,
-        child: Child,
+        processes: Vec<Child>,
         file_path: PathBuf,
         simulator_id: String,
         bundle_id: String,
@@ -36,7 +36,7 @@ impl LogSessionStore {
         let id = self.next_id();
         let session = LogSession {
             id: id.clone(),
-            child,
+            processes,
             file_path,
             simulator_id,
             bundle_id,

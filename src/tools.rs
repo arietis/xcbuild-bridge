@@ -304,6 +304,13 @@ pub fn tool_definitions() -> Vec<ToolDefinition> {
                     "simulatorId": { "type": "string" },
                     "simulatorName": { "type": "string" },
                     "bundleId": { "type": "string" },
+                    "captureConsole": { "type": "boolean" },
+                    "subsystemFilter": {
+                        "oneOf": [
+                            { "type": "string", "enum": ["app", "all", "swiftui"] },
+                            { "type": "array", "items": { "type": "string" }, "minItems": 1 }
+                        ]
+                    },
                     "useLatestOS": { "type": "boolean" }
                 },
                 "required": ["bundleId"]

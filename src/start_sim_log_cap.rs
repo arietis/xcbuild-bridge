@@ -1,4 +1,5 @@
 use serde::Deserialize;
+use std::collections::BTreeSet;
 use std::fs::OpenOptions;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
@@ -16,6 +17,8 @@ pub struct StartSimLogCapParamsInput {
     pub simulator_id: Option<String>,
     pub simulator_name: Option<String>,
     pub bundle_id: Option<String>,
+    pub capture_console: Option<bool>,
+    pub subsystem_filter: Option<SubsystemFilterInput>,
     pub use_latest_os: Option<bool>,
 }
 
@@ -24,6 +27,8 @@ pub struct StartSimLogCapParams {
     pub simulator_id: Option<String>,
     pub simulator_name: Option<String>,
     pub bundle_id: String,
+    pub capture_console: bool,
+    pub subsystem_filter: SubsystemFilter,
     pub use_latest_os: bool,
 }
 
@@ -36,6 +41,8 @@ pub fn start_sim_log_cap_from_input(
         normalize_opt(input.simulator_name).or_else(|| defaults.simulator_name.clone());
     let bundle_id = normalize_opt(input.bundle_id)
         .ok_or_else(|| "bundleId is required".to_string())?;
+    let capture_console = input.capture_console.unwrap_or(false);
+    let subsystem_filter = normalize_subsystem_filter(input.subsystem_filter)?;
     let use_latest_os = input
         .use_latest_os
         .or(defaults.use_latest_os)
@@ -52,6 +59,8 @@ pub fn start_sim_log_cap_from_input(
         simulator_id,
         simulator_name,
         bundle_id,
+        capture_console,
+        subsystem_filter,
         use_latest_os,
     })
 }
@@ -92,17 +101,69 @@ pub fn execute_start_sim_log_cap(
         }
     };
 
-    let stderr = match file.try_clone() {
-        Ok(stderr) => stderr,
+    drop(file);
+
+    let predicate = build_log_predicate(&params.bundle_id, &params.subsystem_filter);
+    let mut processes = Vec::new();
+
+    if params.capture_console {
+        let stdout = match open_log_append(&log_path) {
+            Ok(file) => file,
+            Err(err) => {
+                return ToolResponse::error(
+                    "Failed to prepare log file".to_string(),
+                    Some(err),
+                );
+            }
+        };
+        let stderr = match open_log_append(&log_path) {
+            Ok(file) => file,
+            Err(err) => {
+                return ToolResponse::error(
+                    "Failed to prepare log file".to_string(),
+                    Some(err),
+                );
+            }
+        };
+
+        let mut cmd = Command::new("xcrun");
+        cmd.args([
+            "simctl",
+            "launch",
+            "--console-pty",
+            "--terminate-running-process",
+            &simulator_id,
+            &params.bundle_id,
+        ])
+        .stdin(Stdio::null())
+        .stdout(Stdio::from(stdout))
+        .stderr(Stdio::from(stderr));
+
+        match cmd.spawn() {
+            Ok(child) => processes.push(child),
+            Err(err) => {
+                return ToolResponse::error(
+                    "Failed to start console log capture".to_string(),
+                    Some(err.to_string()),
+                );
+            }
+        };
+    }
+
+    let stdout = match open_log_append(&log_path) {
+        Ok(file) => file,
         Err(err) => {
-            return ToolResponse::error(
-                "Failed to prepare log file".to_string(),
-                Some(err.to_string()),
-            );
+            terminate_processes(&mut processes);
+            return ToolResponse::error("Failed to prepare log file".to_string(), Some(err));
         }
     };
-
-    let predicate = format!("subsystem == \"{}\"", params.bundle_id);
+    let stderr = match open_log_append(&log_path) {
+        Ok(file) => file,
+        Err(err) => {
+            terminate_processes(&mut processes);
+            return ToolResponse::error("Failed to prepare log file".to_string(), Some(err));
+        }
+    };
 
     let mut cmd = Command::new("xcrun");
     cmd.args([
@@ -111,18 +172,22 @@ pub fn execute_start_sim_log_cap(
         &simulator_id,
         "log",
         "stream",
+        "--level=debug",
         "--style",
         "syslog",
-        "--predicate",
-        &predicate,
     ])
     .stdin(Stdio::null())
-    .stdout(Stdio::from(file))
+    .stdout(Stdio::from(stdout))
     .stderr(Stdio::from(stderr));
+
+    if let Some(predicate) = predicate {
+        cmd.args(["--predicate", &predicate]);
+    }
 
     let child = match cmd.spawn() {
         Ok(child) => child,
         Err(err) => {
+            terminate_processes(&mut processes);
             return ToolResponse::error(
                 "Failed to start log capture".to_string(),
                 Some(err.to_string()),
@@ -130,8 +195,10 @@ pub fn execute_start_sim_log_cap(
         }
     };
 
+    processes.push(child);
+
     let session_id = sessions.insert(
-        child,
+        processes,
         log_path,
         simulator_id.clone(),
         params.bundle_id.clone(),
@@ -142,6 +209,9 @@ pub fn execute_start_sim_log_cap(
         "Log capture started successfully. Session ID: {}.",
         session_id
     ));
+    if params.capture_console {
+        lines.push("Note: App was relaunched to capture console output.".to_string());
+    }
     lines.push("Next steps:".to_string());
     lines.push(format!(
         "1. Interact with your app on simulator {}.",
@@ -162,6 +232,118 @@ fn create_log_file_path() -> Result<PathBuf, String> {
         .as_nanos();
     let filename = format!("xcbuild-sim-log-{}-{}.log", std::process::id(), nanos);
     Ok(std::env::temp_dir().join(filename))
+}
+
+fn open_log_append(path: &PathBuf) -> Result<std::fs::File, String> {
+    OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+        .map_err(|err| err.to_string())
+}
+
+fn terminate_processes(processes: &mut [std::process::Child]) {
+    for child in processes {
+        let _ = child.kill();
+        let _ = child.wait();
+    }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum SubsystemFilterName {
+    App,
+    All,
+    Swiftui,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+pub enum SubsystemFilterInput {
+    Named(SubsystemFilterName),
+    List(Vec<String>),
+}
+
+#[derive(Debug, Clone)]
+pub enum SubsystemFilter {
+    App,
+    All,
+    Swiftui,
+    Custom(Vec<String>),
+}
+
+fn normalize_subsystem_filter(
+    input: Option<SubsystemFilterInput>,
+) -> Result<SubsystemFilter, String> {
+    match input.unwrap_or(SubsystemFilterInput::Named(SubsystemFilterName::App)) {
+        SubsystemFilterInput::Named(name) => Ok(match name {
+            SubsystemFilterName::App => SubsystemFilter::App,
+            SubsystemFilterName::All => SubsystemFilter::All,
+            SubsystemFilterName::Swiftui => SubsystemFilter::Swiftui,
+        }),
+        SubsystemFilterInput::List(list) => {
+            let mut cleaned: Vec<String> = list
+                .into_iter()
+                .map(|value| value.trim().to_string())
+                .filter(|value| !value.is_empty())
+                .collect();
+            cleaned.sort();
+            cleaned.dedup();
+            if cleaned.is_empty() {
+                return Err("subsystemFilter list cannot be empty".to_string());
+            }
+            Ok(SubsystemFilter::Custom(cleaned))
+        }
+    }
+}
+
+fn build_log_predicate(bundle_id: &str, filter: &SubsystemFilter) -> Option<String> {
+    match filter {
+        SubsystemFilter::All => None,
+        SubsystemFilter::App => Some(format!("subsystem == \"{}\"", bundle_id)),
+        SubsystemFilter::Swiftui => Some(format!(
+            "subsystem == \"{}\" OR subsystem == \"com.apple.SwiftUI\"",
+            bundle_id
+        )),
+        SubsystemFilter::Custom(subsystems) => {
+            let mut set = BTreeSet::new();
+            set.insert(bundle_id.to_string());
+            for entry in subsystems {
+                set.insert(entry.clone());
+            }
+            let predicates: Vec<String> = set
+                .into_iter()
+                .map(|entry| format!("subsystem == \"{}\"", entry))
+                .collect();
+            Some(predicates.join(" OR "))
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn build_log_predicate_app() {
+        let predicate = build_log_predicate("com.example.app", &SubsystemFilter::App)
+            .expect("predicate");
+        assert_eq!(predicate, "subsystem == \"com.example.app\"");
+    }
+
+    #[test]
+    fn build_log_predicate_all_returns_none() {
+        let predicate = build_log_predicate("com.example.app", &SubsystemFilter::All);
+        assert!(predicate.is_none());
+    }
+
+    #[test]
+    fn build_log_predicate_custom_includes_bundle() {
+        let filter = SubsystemFilter::Custom(vec!["com.example.custom".to_string()]);
+        let predicate = build_log_predicate("com.example.app", &filter).expect("predicate");
+        assert!(predicate.contains("com.example.app"));
+        assert!(predicate.contains("com.example.custom"));
+    }
 }
 
 fn normalize_opt(value: Option<String>) -> Option<String> {

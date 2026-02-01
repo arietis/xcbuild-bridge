@@ -37,8 +37,10 @@ pub fn execute_stop_sim_log_cap(
         }
     };
 
-    let _ = session.child.kill();
-    let _ = session.child.wait();
+    for child in session.processes.iter_mut() {
+        let _ = child.kill();
+        let _ = child.wait();
+    }
 
     let log_content = match fs::read_to_string(&session.file_path) {
         Ok(content) => content,
