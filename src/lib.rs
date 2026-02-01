@@ -12,13 +12,16 @@ pub mod install_app_sim;
 pub mod launch_app_sim;
 pub mod list_sims;
 pub mod list_schemes;
+pub mod log_sessions;
 pub mod mcp;
 pub mod session;
 pub mod simctl;
 pub mod smoke_sim;
+pub mod start_sim_log_cap;
 pub mod test_sim;
 pub mod test_support;
 pub mod test_without_building_sim;
+pub mod stop_sim_log_cap;
 pub mod tools;
 
 pub use mcp::run_stdio_server;

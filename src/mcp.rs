@@ -3,6 +3,7 @@ use serde_json::{Value, json};
 use std::io::{self, BufRead, Write};
 
 use crate::exec::OsRunner;
+use crate::log_sessions::LogSessionStore;
 use crate::session::SessionStore;
 use crate::tools::{ToolCallError, call_tool, tool_definitions};
 
@@ -35,6 +36,7 @@ pub struct JsonRpcError {
 struct ServerState {
     session: SessionStore,
     runner: OsRunner,
+    log_sessions: LogSessionStore,
     protocol_version: String,
 }
 
@@ -44,6 +46,7 @@ pub fn run_stdio_server() -> io::Result<()> {
     let mut state = ServerState {
         session: SessionStore::new(),
         runner: OsRunner,
+        log_sessions: LogSessionStore::new(),
         protocol_version: "2024-11-05".to_string(),
     };
 
@@ -153,7 +156,13 @@ fn handle_tools_call(state: &mut ServerState, id: Value, params: Option<Value>) 
         .cloned()
         .unwrap_or_else(|| json!({}));
 
-    match call_tool(&name, args, &mut state.session, &state.runner) {
+    match call_tool(
+        &name,
+        args,
+        &mut state.session,
+        &mut state.log_sessions,
+        &state.runner,
+    ) {
         Ok(tool_response) => JsonRpcResponse {
             jsonrpc: "2.0",
             id,

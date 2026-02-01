@@ -23,8 +23,15 @@ use crate::install_app_sim::{
 use crate::launch_app_sim::{
     LaunchAppSimParamsInput, execute_launch_app_sim, launch_app_sim_from_input,
 };
+use crate::log_sessions::LogSessionStore;
 use crate::list_schemes::{ListSchemesParamsInput, execute_list_schemes, list_schemes_from_input};
 use crate::list_sims::{ListSimsParams, execute_list_sims};
+use crate::start_sim_log_cap::{
+    StartSimLogCapParamsInput, execute_start_sim_log_cap, start_sim_log_cap_from_input,
+};
+use crate::stop_sim_log_cap::{
+    StopSimLogCapParamsInput, execute_stop_sim_log_cap, stop_sim_log_cap_from_input,
+};
 use crate::session::{SessionClearDefaultsParams, SessionSetDefaultsParams, SessionStore};
 use crate::smoke_sim::{SmokeSimParamsInput, execute_smoke_sim, smoke_sim_from_input};
 use crate::test_sim::{TestSimParamsInput, execute_test_sim, test_sim_from_input};
@@ -287,6 +294,37 @@ pub fn tool_definitions() -> Vec<ToolDefinition> {
             annotations: Some(json!({ "destructiveHint": true })),
         },
         ToolDefinition {
+            name: "start_sim_log_cap",
+            title: "Start Simulator Log Capture",
+            description: "Starts capturing logs from a specified simulator. Returns a session ID.",
+            input_schema: json!({
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                    "simulatorId": { "type": "string" },
+                    "simulatorName": { "type": "string" },
+                    "bundleId": { "type": "string" },
+                    "useLatestOS": { "type": "boolean" }
+                },
+                "required": ["bundleId"]
+            }),
+            annotations: Some(json!({ "destructiveHint": true })),
+        },
+        ToolDefinition {
+            name: "stop_sim_log_cap",
+            title: "Stop Simulator Log Capture",
+            description: "Stops an active simulator log capture session and returns the captured logs.",
+            input_schema: json!({
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                    "logSessionId": { "type": "string" }
+                },
+                "required": ["logSessionId"]
+            }),
+            annotations: Some(json!({ "destructiveHint": true })),
+        },
+        ToolDefinition {
             name: "build_sim",
             title: "Build Simulator",
             description: "Builds an app for an iOS simulator.",
@@ -431,6 +469,7 @@ pub fn call_tool(
     name: &str,
     args: Value,
     session: &mut SessionStore,
+    log_sessions: &mut LogSessionStore,
     runner: &impl Runner,
 ) -> Result<ToolResponse, ToolCallError> {
     let args = if args.is_null() { json!({}) } else { args };
@@ -609,6 +648,48 @@ pub fn call_tool(
                 }
             };
             Ok(execute_launch_app_sim(merged, runner))
+        }
+        "start_sim_log_cap" => {
+            let params: StartSimLogCapParamsInput = match serde_json::from_value(args) {
+                Ok(params) => params,
+                Err(err) => {
+                    return Ok(ToolResponse::error(
+                        "Parameter validation failed".to_string(),
+                        Some(err.to_string()),
+                    ));
+                }
+            };
+            let merged = match start_sim_log_cap_from_input(params, &session.get_all()) {
+                Ok(merged) => merged,
+                Err(err) => {
+                    return Ok(ToolResponse::error(
+                        "Parameter validation failed".to_string(),
+                        Some(err),
+                    ));
+                }
+            };
+            Ok(execute_start_sim_log_cap(merged, log_sessions, runner))
+        }
+        "stop_sim_log_cap" => {
+            let params: StopSimLogCapParamsInput = match serde_json::from_value(args) {
+                Ok(params) => params,
+                Err(err) => {
+                    return Ok(ToolResponse::error(
+                        "Parameter validation failed".to_string(),
+                        Some(err.to_string()),
+                    ));
+                }
+            };
+            let merged = match stop_sim_log_cap_from_input(params) {
+                Ok(merged) => merged,
+                Err(err) => {
+                    return Ok(ToolResponse::error(
+                        "Parameter validation failed".to_string(),
+                        Some(err),
+                    ));
+                }
+            };
+            Ok(execute_stop_sim_log_cap(merged, log_sessions))
         }
         "boot_sim" => {
             let params: BootSimParamsInput = match serde_json::from_value(args) {
