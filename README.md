@@ -36,6 +36,7 @@ args = []
 - `list_sims`
 - `discover_projs`
 - `list_schemes`
+- `get_app_bundle_id`
 - `get_sim_app_path`
 - `install_app_sim`
 - `launch_app_sim`

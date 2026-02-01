@@ -10,6 +10,9 @@ use crate::discover_projs::{DiscoverProjsParamsInput, execute_discover_projs};
 use crate::discover_xctestrun::{DiscoverXctestrunParamsInput, execute_discover_xctestrun};
 use crate::erase_sims::{EraseSimsParamsInput, erase_sims_from_input, execute_erase_sims};
 use crate::exec::Runner;
+use crate::get_app_bundle_id::{
+    GetAppBundleIdParamsInput, execute_get_app_bundle_id, get_app_bundle_id_from_input,
+};
 use crate::get_sim_app_path::{
     GetSimAppPathParamsInput, execute_get_sim_app_path, get_sim_app_path_from_input,
 };
@@ -179,6 +182,20 @@ pub fn tool_definitions() -> Vec<ToolDefinition> {
                     "projectPath": { "type": "string" },
                     "workspacePath": { "type": "string" }
                 }
+            }),
+            annotations: Some(json!({ "readOnlyHint": true })),
+        },
+        ToolDefinition {
+            name: "get_app_bundle_id",
+            title: "Get App Bundle ID",
+            description: "Extracts the bundle identifier from an app bundle (.app).",
+            input_schema: json!({
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                    "appPath": { "type": "string" }
+                },
+                "required": ["appPath"]
             }),
             annotations: Some(json!({ "readOnlyHint": true })),
         },
@@ -481,6 +498,27 @@ pub fn call_tool(
                 }
             };
             Ok(execute_list_schemes(merged, runner))
+        }
+        "get_app_bundle_id" => {
+            let params: GetAppBundleIdParamsInput = match serde_json::from_value(args) {
+                Ok(params) => params,
+                Err(err) => {
+                    return Ok(ToolResponse::error(
+                        "Parameter validation failed".to_string(),
+                        Some(err.to_string()),
+                    ));
+                }
+            };
+            let merged = match get_app_bundle_id_from_input(params) {
+                Ok(merged) => merged,
+                Err(err) => {
+                    return Ok(ToolResponse::error(
+                        "Parameter validation failed".to_string(),
+                        Some(err),
+                    ));
+                }
+            };
+            Ok(execute_get_app_bundle_id(merged, runner))
         }
         "get_sim_app_path" => {
             let params: GetSimAppPathParamsInput = match serde_json::from_value(args) {

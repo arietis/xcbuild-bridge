@@ -5,6 +5,7 @@ pub mod discover_projs;
 pub mod discover_xctestrun;
 pub mod erase_sims;
 pub mod exec;
+pub mod get_app_bundle_id;
 pub mod get_sim_app_path;
 pub mod install_app_sim;
 pub mod launch_app_sim;
