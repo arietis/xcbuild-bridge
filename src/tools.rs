@@ -10,6 +10,15 @@ use crate::discover_projs::{DiscoverProjsParamsInput, execute_discover_projs};
 use crate::discover_xctestrun::{DiscoverXctestrunParamsInput, execute_discover_xctestrun};
 use crate::erase_sims::{EraseSimsParamsInput, erase_sims_from_input, execute_erase_sims};
 use crate::exec::Runner;
+use crate::get_sim_app_path::{
+    GetSimAppPathParamsInput, execute_get_sim_app_path, get_sim_app_path_from_input,
+};
+use crate::install_app_sim::{
+    InstallAppSimParamsInput, execute_install_app_sim, install_app_sim_from_input,
+};
+use crate::launch_app_sim::{
+    LaunchAppSimParamsInput, execute_launch_app_sim, launch_app_sim_from_input,
+};
 use crate::list_schemes::{ListSchemesParamsInput, execute_list_schemes, list_schemes_from_input};
 use crate::list_sims::{ListSimsParams, execute_list_sims};
 use crate::session::{SessionClearDefaultsParams, SessionSetDefaultsParams, SessionStore};
@@ -172,6 +181,60 @@ pub fn tool_definitions() -> Vec<ToolDefinition> {
                 }
             }),
             annotations: Some(json!({ "readOnlyHint": true })),
+        },
+        ToolDefinition {
+            name: "get_sim_app_path",
+            title: "Get Simulator App Path",
+            description: "Retrieves the built app path for an iOS simulator.",
+            input_schema: json!({
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                    "projectPath": { "type": "string" },
+                    "workspacePath": { "type": "string" },
+                    "scheme": { "type": "string" },
+                    "configuration": { "type": "string" },
+                    "simulatorId": { "type": "string" },
+                    "simulatorName": { "type": "string" },
+                    "useLatestOS": { "type": "boolean" }
+                }
+            }),
+            annotations: Some(json!({ "readOnlyHint": true })),
+        },
+        ToolDefinition {
+            name: "install_app_sim",
+            title: "Install App Simulator",
+            description: "Installs an app in an iOS simulator.",
+            input_schema: json!({
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                    "simulatorId": { "type": "string" },
+                    "simulatorName": { "type": "string" },
+                    "appPath": { "type": "string" },
+                    "useLatestOS": { "type": "boolean" }
+                },
+                "required": ["appPath"]
+            }),
+            annotations: Some(json!({ "destructiveHint": true })),
+        },
+        ToolDefinition {
+            name: "launch_app_sim",
+            title: "Launch App Simulator",
+            description: "Launches an app in an iOS simulator.",
+            input_schema: json!({
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                    "simulatorId": { "type": "string" },
+                    "simulatorName": { "type": "string" },
+                    "bundleId": { "type": "string" },
+                    "args": { "type": "array", "items": { "type": "string" } },
+                    "useLatestOS": { "type": "boolean" }
+                },
+                "required": ["bundleId"]
+            }),
+            annotations: Some(json!({ "destructiveHint": true })),
         },
         ToolDefinition {
             name: "boot_sim",
@@ -418,6 +481,69 @@ pub fn call_tool(
                 }
             };
             Ok(execute_list_schemes(merged, runner))
+        }
+        "get_sim_app_path" => {
+            let params: GetSimAppPathParamsInput = match serde_json::from_value(args) {
+                Ok(params) => params,
+                Err(err) => {
+                    return Ok(ToolResponse::error(
+                        "Parameter validation failed".to_string(),
+                        Some(err.to_string()),
+                    ));
+                }
+            };
+            let merged = match get_sim_app_path_from_input(params, &session.get_all()) {
+                Ok(merged) => merged,
+                Err(err) => {
+                    return Ok(ToolResponse::error(
+                        "Parameter validation failed".to_string(),
+                        Some(err),
+                    ));
+                }
+            };
+            Ok(execute_get_sim_app_path(merged, runner))
+        }
+        "install_app_sim" => {
+            let params: InstallAppSimParamsInput = match serde_json::from_value(args) {
+                Ok(params) => params,
+                Err(err) => {
+                    return Ok(ToolResponse::error(
+                        "Parameter validation failed".to_string(),
+                        Some(err.to_string()),
+                    ));
+                }
+            };
+            let merged = match install_app_sim_from_input(params, &session.get_all()) {
+                Ok(merged) => merged,
+                Err(err) => {
+                    return Ok(ToolResponse::error(
+                        "Parameter validation failed".to_string(),
+                        Some(err),
+                    ));
+                }
+            };
+            Ok(execute_install_app_sim(merged, runner))
+        }
+        "launch_app_sim" => {
+            let params: LaunchAppSimParamsInput = match serde_json::from_value(args) {
+                Ok(params) => params,
+                Err(err) => {
+                    return Ok(ToolResponse::error(
+                        "Parameter validation failed".to_string(),
+                        Some(err.to_string()),
+                    ));
+                }
+            };
+            let merged = match launch_app_sim_from_input(params, &session.get_all()) {
+                Ok(merged) => merged,
+                Err(err) => {
+                    return Ok(ToolResponse::error(
+                        "Parameter validation failed".to_string(),
+                        Some(err),
+                    ));
+                }
+            };
+            Ok(execute_launch_app_sim(merged, runner))
         }
         "boot_sim" => {
             let params: BootSimParamsInput = match serde_json::from_value(args) {
