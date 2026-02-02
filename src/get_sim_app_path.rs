@@ -1,5 +1,6 @@
 use serde::Deserialize;
 
+use crate::app_bundle::extract_app_path_from_build_settings;
 use crate::exec::{CommandSpec, Runner};
 use crate::session::SessionDefaults;
 use crate::test_support::render_command_output;
@@ -124,7 +125,7 @@ pub fn execute_get_sim_app_path(params: GetSimAppPathParams, runner: &impl Runne
                 return ToolResponse::text(render_command_output(&output), false);
             }
 
-            let app_path = match extract_app_path(&output.stdout) {
+            let app_path = match extract_app_path_from_build_settings(&output.stdout) {
                 Some(path) => path,
                 None => {
                     return ToolResponse::error(
@@ -151,27 +152,6 @@ pub fn execute_get_sim_app_path(params: GetSimAppPathParams, runner: &impl Runne
     }
 }
 
-fn extract_app_path(stdout: &str) -> Option<String> {
-    let built_products_dir = extract_setting(stdout, "BUILT_PRODUCTS_DIR")?;
-    let full_product_name = extract_setting(stdout, "FULL_PRODUCT_NAME")?;
-    Some(format!("{}/{}", built_products_dir, full_product_name))
-}
-
-fn extract_setting(stdout: &str, key: &str) -> Option<String> {
-    for line in stdout.lines() {
-        let trimmed = line.trim();
-        if trimmed.starts_with(key) {
-            if let Some((_, value)) = trimmed.split_once('=') {
-                let value = value.trim();
-                if !value.is_empty() {
-                    return Some(value.to_string());
-                }
-            }
-        }
-    }
-    None
-}
-
 fn normalize_opt(value: Option<String>) -> Option<String> {
     match value {
         Some(value) => {
@@ -188,7 +168,7 @@ fn normalize_opt(value: Option<String>) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::app_bundle::extract_app_path_from_build_settings;
 
     #[test]
     fn extract_app_path_finds_settings() {
@@ -197,7 +177,7 @@ Build settings for action build and target App:
     BUILT_PRODUCTS_DIR = /tmp/DerivedData/Build/Products/Debug-iphonesimulator
     FULL_PRODUCT_NAME = App.app
 ";
-        let path = extract_app_path(stdout).expect("path");
+        let path = extract_app_path_from_build_settings(stdout).expect("path");
         assert_eq!(
             path,
             "/tmp/DerivedData/Build/Products/Debug-iphonesimulator/App.app"

@@ -1,7 +1,6 @@
 use serde::Deserialize;
-use std::fs;
-
-use crate::exec::{CommandSpec, Runner};
+use crate::app_bundle::{read_bundle_id, validate_app_path};
+use crate::exec::Runner;
 use crate::tools::ToolResponse;
 
 #[derive(Debug, Deserialize)]
@@ -46,74 +45,6 @@ pub fn execute_get_app_bundle_id(params: GetAppBundleIdParams, runner: &impl Run
     ToolResponse::text(lines.join("\n"), true)
 }
 
-fn validate_app_path(app_path: &str) -> Result<(), String> {
-    let metadata = fs::metadata(app_path).map_err(|err| err.to_string())?;
-    if metadata.is_dir() {
-        Ok(())
-    } else {
-        Err("appPath is not a directory".to_string())
-    }
-}
-
-fn read_bundle_id(app_path: &str, runner: &impl Runner) -> Result<String, String> {
-    let info_path = format!("{}/Info", app_path.trim_end_matches('/'));
-    let defaults_spec = CommandSpec {
-        program: "defaults".to_string(),
-        args: vec![
-            "read".to_string(),
-            info_path,
-            "CFBundleIdentifier".to_string(),
-        ],
-        cwd: None,
-        env: None,
-    };
-    let defaults_output = runner.run(&defaults_spec).map_err(|err| err.to_string())?;
-    if defaults_output.exit_code == 0 {
-        let bundle_id = defaults_output.stdout.trim();
-        if !bundle_id.is_empty() {
-            return Ok(bundle_id.to_string());
-        }
-    }
-
-    let plist_path = format!("{}/Info.plist", app_path.trim_end_matches('/'));
-    let plist_spec = CommandSpec {
-        program: "/usr/libexec/PlistBuddy".to_string(),
-        args: vec![
-            "-c".to_string(),
-            "Print :CFBundleIdentifier".to_string(),
-            plist_path,
-        ],
-        cwd: None,
-        env: None,
-    };
-    let plist_output = runner.run(&plist_spec).map_err(|err| err.to_string())?;
-    if plist_output.exit_code == 0 {
-        let bundle_id = plist_output.stdout.trim();
-        if !bundle_id.is_empty() {
-            return Ok(bundle_id.to_string());
-        }
-    }
-
-    Err(format!(
-        "defaults output: {}\nplistbuddy output: {}",
-        format_command_output(&defaults_output),
-        format_command_output(&plist_output)
-    ))
-}
-
-fn format_command_output(output: &crate::exec::CommandOutput) -> String {
-    let mut message = format!("Command exited with code {}", output.exit_code);
-    if !output.stdout.trim().is_empty() {
-        message.push_str("\nSTDOUT:\n");
-        message.push_str(output.stdout.trim());
-    }
-    if !output.stderr.trim().is_empty() {
-        message.push_str("\nSTDERR:\n");
-        message.push_str(output.stderr.trim());
-    }
-    message
-}
-
 fn normalize_opt(value: Option<String>) -> Option<String> {
     match value {
         Some(value) => {
@@ -152,9 +83,6 @@ mod tests {
 
     #[test]
     fn read_bundle_id_uses_defaults_when_available() {
-        let temp_dir = std::env::temp_dir().join("TestBundle.app");
-        let _ = fs::create_dir_all(&temp_dir);
-
         let runner = MockRunner {
             outputs: RefCell::new(vec![CommandOutput {
                 exit_code: 0,
@@ -164,18 +92,12 @@ mod tests {
             }]),
         };
 
-        let result = read_bundle_id(temp_dir.to_string_lossy().as_ref(), &runner)
-            .expect("bundle id");
+        let result = read_bundle_id("/tmp/Test.app", &runner).expect("bundle id");
         assert_eq!(result, "com.example.App");
-
-        let _ = fs::remove_dir_all(&temp_dir);
     }
 
     #[test]
     fn read_bundle_id_falls_back_to_plistbuddy() {
-        let temp_dir = std::env::temp_dir().join("TestBundleFallback.app");
-        let _ = fs::create_dir_all(&temp_dir);
-
         let runner = MockRunner {
             outputs: RefCell::new(vec![
                 CommandOutput {
@@ -193,10 +115,7 @@ mod tests {
             ]),
         };
 
-        let result = read_bundle_id(temp_dir.to_string_lossy().as_ref(), &runner)
-            .expect("bundle id");
+        let result = read_bundle_id("/tmp/Test.app", &runner).expect("bundle id");
         assert_eq!(result, "com.example.Fallback");
-
-        let _ = fs::remove_dir_all(&temp_dir);
     }
 }

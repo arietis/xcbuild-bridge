@@ -1,6 +1,5 @@
 use serde::Deserialize;
-use std::fs;
-
+use crate::app_bundle::{read_bundle_id, validate_app_path};
 use crate::exec::{CommandSpec, Runner};
 use crate::session::SessionDefaults;
 use crate::simctl::resolve_simulator_id;
@@ -119,37 +118,6 @@ pub fn execute_install_app_sim(params: InstallAppSimParams, runner: &impl Runner
     ToolResponse::text(lines.join("\n"), true)
 }
 
-fn validate_app_path(app_path: &str) -> Result<(), String> {
-    let metadata = fs::metadata(app_path).map_err(|err| err.to_string())?;
-    if metadata.is_dir() {
-        Ok(())
-    } else {
-        Err("appPath is not a directory".to_string())
-    }
-}
-
-fn read_bundle_id(app_path: &str, runner: &impl Runner) -> Option<String> {
-    let info_path = format!("{}/Info", app_path.trim_end_matches('/'));
-    let spec = CommandSpec {
-        program: "defaults".to_string(),
-        args: vec![
-            "read".to_string(),
-            info_path,
-            "CFBundleIdentifier".to_string(),
-        ],
-        cwd: None,
-        env: None,
-    };
-    let output = runner.run(&spec).ok()?;
-    if output.exit_code == 0 {
-        let bundle_id = output.stdout.trim();
-        if !bundle_id.is_empty() {
-            return Some(bundle_id.to_string());
-        }
-    }
-    None
-}
-
 fn format_command_output(output: &crate::exec::CommandOutput) -> String {
     let mut message = format!("Command exited with code {}", output.exit_code);
     if !output.stdout.trim().is_empty() {
@@ -211,7 +179,7 @@ mod tests {
     fn install_app_sim_reads_bundle_id_when_available() {
         let temp_dir = std::env::temp_dir();
         let app_dir = temp_dir.join("TestApp.app");
-        let _ = fs::create_dir_all(&app_dir);
+        let _ = std::fs::create_dir_all(&app_dir);
 
         let runner = MockRunner {
             outputs: RefCell::new(vec![
@@ -243,15 +211,14 @@ mod tests {
             .iter()
             .any(|content| matches!(content, crate::tools::ToolResponseContent::Text { text } if text.contains("com.example.Test"))));
 
-        let _ = fs::remove_dir_all(&app_dir);
     }
 
     #[test]
     fn validate_app_path_rejects_files() {
         let temp_file = std::env::temp_dir().join("xcbuild-app.txt");
-        let _ = fs::write(&temp_file, "test");
+        let _ = std::fs::write(&temp_file, "test");
         let result = validate_app_path(temp_file.to_string_lossy().as_ref());
         assert!(result.is_err());
-        let _ = fs::remove_file(&temp_file);
+        let _ = std::fs::remove_file(&temp_file);
     }
 }

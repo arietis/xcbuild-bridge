@@ -1,4 +1,5 @@
 pub mod boot_sim;
+pub mod app_bundle;
 pub mod build_for_testing_sim;
 pub mod build_run_sim;
 pub mod build_sim;
