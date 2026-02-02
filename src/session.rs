@@ -12,6 +12,10 @@ pub struct SessionDefaults {
     pub device_id: Option<String>,
     pub use_latest_os: Option<bool>,
     pub arch: Option<String>,
+    pub verbosity: Option<String>,
+    pub include_next_steps: Option<bool>,
+    pub max_output_lines: Option<u32>,
+    pub max_output_chars: Option<u32>,
 }
 
 #[derive(Debug, Clone)]
@@ -102,6 +106,18 @@ impl SessionStore {
         if let Some(value) = params.arch {
             self.defaults.arch = Some(value);
         }
+        if let Some(value) = params.verbosity {
+            self.defaults.verbosity = Some(value);
+        }
+        if let Some(value) = params.include_next_steps {
+            self.defaults.include_next_steps = Some(value);
+        }
+        if let Some(value) = params.max_output_lines {
+            self.defaults.max_output_lines = Some(value);
+        }
+        if let Some(value) = params.max_output_chars {
+            self.defaults.max_output_chars = Some(value);
+        }
 
         SessionSetResult {
             updated: self.get_all(),
@@ -125,6 +141,10 @@ impl SessionStore {
                 SessionKey::DeviceId => self.defaults.device_id = None,
                 SessionKey::UseLatestOs => self.defaults.use_latest_os = None,
                 SessionKey::Arch => self.defaults.arch = None,
+                SessionKey::Verbosity => self.defaults.verbosity = None,
+                SessionKey::IncludeNextSteps => self.defaults.include_next_steps = None,
+                SessionKey::MaxOutputLines => self.defaults.max_output_lines = None,
+                SessionKey::MaxOutputChars => self.defaults.max_output_chars = None,
             }
         }
     }
@@ -148,6 +168,10 @@ pub struct SessionSetDefaultsParams {
     pub device_id: Option<String>,
     pub use_latest_os: Option<bool>,
     pub arch: Option<String>,
+    pub verbosity: Option<String>,
+    pub include_next_steps: Option<bool>,
+    pub max_output_lines: Option<u32>,
+    pub max_output_chars: Option<u32>,
 }
 
 #[derive(Debug, Serialize)]
@@ -184,4 +208,12 @@ pub enum SessionKey {
     UseLatestOs,
     #[serde(rename = "arch")]
     Arch,
+    #[serde(rename = "verbosity")]
+    Verbosity,
+    #[serde(rename = "includeNextSteps")]
+    IncludeNextSteps,
+    #[serde(rename = "maxOutputLines")]
+    MaxOutputLines,
+    #[serde(rename = "maxOutputChars")]
+    MaxOutputChars,
 }

@@ -26,6 +26,7 @@ use crate::launch_app_sim::{
 use crate::log_sessions::LogSessionStore;
 use crate::list_schemes::{ListSchemesParamsInput, execute_list_schemes, list_schemes_from_input};
 use crate::list_sims::{ListSimsParams, execute_list_sims};
+use crate::output_policy::apply_output_policy;
 use crate::start_sim_log_cap::{
     StartSimLogCapParamsInput, execute_start_sim_log_cap, start_sim_log_cap_from_input,
 };
@@ -108,7 +109,11 @@ pub fn tool_definitions() -> Vec<ToolDefinition> {
                     "simulatorId": { "type": "string" },
                     "deviceId": { "type": "string" },
                     "useLatestOS": { "type": "boolean" },
-                    "arch": { "type": "string" }
+                    "arch": { "type": "string" },
+                    "verbosity": { "type": "string", "enum": ["terse", "verbose"] },
+                    "includeNextSteps": { "type": "boolean" },
+                    "maxOutputLines": { "type": "integer", "minimum": 1 },
+                    "maxOutputChars": { "type": "integer", "minimum": 1 }
                 }
             }),
             annotations: Some(json!({ "destructiveHint": true })),
@@ -142,7 +147,11 @@ pub fn tool_definitions() -> Vec<ToolDefinition> {
                             "simulatorId",
                             "deviceId",
                             "useLatestOS",
-                            "arch"
+                            "arch",
+                            "verbosity",
+                            "includeNextSteps",
+                            "maxOutputLines",
+                            "maxOutputChars"
                         ]}
                     },
                     "all": { "type": "boolean" }
@@ -481,7 +490,7 @@ pub fn call_tool(
 ) -> Result<ToolResponse, ToolCallError> {
     let args = if args.is_null() { json!({}) } else { args };
 
-    match name {
+    let response = match name {
         "session-set-defaults" => {
             let params: SessionSetDefaultsParams = match serde_json::from_value(args) {
                 Ok(params) => params,
@@ -879,6 +888,11 @@ pub fn call_tool(
             Ok(execute_test_sim(merged, runner))
         }
         _ => Err(ToolCallError::UnknownTool(name.to_string())),
+    };
+
+    match response {
+        Ok(result) => Ok(apply_output_policy(result, &session.get_all())),
+        Err(err) => Err(err),
     }
 }
 
@@ -893,5 +907,9 @@ pub fn session_keys() -> Vec<&'static str> {
         "deviceId",
         "useLatestOS",
         "arch",
+        "verbosity",
+        "includeNextSteps",
+        "maxOutputLines",
+        "maxOutputChars",
     ]
 }

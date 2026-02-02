@@ -23,6 +23,10 @@ fn session_set_defaults_prefers_workspace() {
         device_id: None,
         use_latest_os: None,
         arch: None,
+        verbosity: None,
+        include_next_steps: None,
+        max_output_lines: None,
+        max_output_chars: None,
     });
 
     assert_eq!(
@@ -46,6 +50,10 @@ fn session_set_defaults_clears_conflicting_keys() {
         device_id: None,
         use_latest_os: None,
         arch: None,
+        verbosity: None,
+        include_next_steps: None,
+        max_output_lines: None,
+        max_output_chars: None,
     });
 
     store.set_defaults(SessionSetDefaultsParams {
@@ -58,6 +66,10 @@ fn session_set_defaults_clears_conflicting_keys() {
         device_id: None,
         use_latest_os: None,
         arch: None,
+        verbosity: None,
+        include_next_steps: None,
+        max_output_lines: None,
+        max_output_chars: None,
     });
 
     let updated = store.get_all();

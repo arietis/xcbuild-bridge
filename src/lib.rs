@@ -15,6 +15,7 @@ pub mod list_sims;
 pub mod list_schemes;
 pub mod log_sessions;
 pub mod mcp;
+pub mod output_policy;
 pub mod session;
 pub mod simctl;
 pub mod smoke_sim;
