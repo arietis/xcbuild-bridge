@@ -22,6 +22,7 @@ pub mod session;
 pub mod simctl;
 pub mod smoke_sim;
 pub mod start_sim_log_cap;
+pub mod stop_app_sim;
 pub mod test_sim;
 pub mod test_support;
 pub mod test_without_building_sim;

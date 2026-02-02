@@ -32,6 +32,9 @@ use crate::output_policy::apply_output_policy;
 use crate::start_sim_log_cap::{
     StartSimLogCapParamsInput, execute_start_sim_log_cap, start_sim_log_cap_from_input,
 };
+use crate::stop_app_sim::{
+    StopAppSimParamsInput, execute_stop_app_sim, stop_app_sim_from_input,
+};
 use crate::stop_sim_log_cap::{
     StopSimLogCapParamsInput, execute_stop_sim_log_cap, stop_sim_log_cap_from_input,
 };
@@ -286,6 +289,23 @@ pub fn tool_definitions() -> Vec<ToolDefinition> {
                     "simulatorName": { "type": "string" },
                     "bundleId": { "type": "string" },
                     "args": { "type": "array", "items": { "type": "string" } },
+                    "useLatestOS": { "type": "boolean" }
+                },
+                "required": ["bundleId"]
+            }),
+            annotations: Some(json!({ "destructiveHint": true })),
+        },
+        ToolDefinition {
+            name: "stop_app_sim",
+            title: "Stop App Simulator",
+            description: "Stops an app running in an iOS simulator.",
+            input_schema: json!({
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                    "simulatorId": { "type": "string" },
+                    "simulatorName": { "type": "string" },
+                    "bundleId": { "type": "string" },
                     "useLatestOS": { "type": "boolean" }
                 },
                 "required": ["bundleId"]
@@ -710,6 +730,27 @@ pub fn call_tool(
                 }
             };
             Ok(execute_launch_app_sim(merged, runner))
+        }
+        "stop_app_sim" => {
+            let params: StopAppSimParamsInput = match serde_json::from_value(args) {
+                Ok(params) => params,
+                Err(err) => {
+                    return Ok(ToolResponse::error(
+                        "Parameter validation failed".to_string(),
+                        Some(err.to_string()),
+                    ));
+                }
+            };
+            let merged = match stop_app_sim_from_input(params, &session.get_all()) {
+                Ok(merged) => merged,
+                Err(err) => {
+                    return Ok(ToolResponse::error(
+                        "Parameter validation failed".to_string(),
+                        Some(err),
+                    ));
+                }
+            };
+            Ok(execute_stop_app_sim(merged, runner))
         }
         "start_sim_log_cap" => {
             let params: StartSimLogCapParamsInput = match serde_json::from_value(args) {
