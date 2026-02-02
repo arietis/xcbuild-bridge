@@ -24,8 +24,10 @@ use crate::launch_app_sim::{
     LaunchAppSimParamsInput, execute_launch_app_sim, launch_app_sim_from_input,
 };
 use crate::log_sessions::LogSessionStore;
+use crate::list_devices::{ListDevicesParams, execute_list_devices};
 use crate::list_schemes::{ListSchemesParamsInput, execute_list_schemes, list_schemes_from_input};
 use crate::list_sims::{ListSimsParams, execute_list_sims};
+use crate::open_sim::{OpenSimParamsInput, execute_open_sim};
 use crate::output_policy::apply_output_policy;
 use crate::start_sim_log_cap::{
     StartSimLogCapParamsInput, execute_start_sim_log_cap, start_sim_log_cap_from_input,
@@ -169,6 +171,26 @@ pub fn tool_definitions() -> Vec<ToolDefinition> {
                 "properties": {
                     "availableOnly": { "type": "boolean" }
                 }
+            }),
+            annotations: Some(json!({ "readOnlyHint": true })),
+        },
+        ToolDefinition {
+            name: "open_sim",
+            title: "Open Simulator",
+            description: "Opens the iOS Simulator app.",
+            input_schema: json!({
+                "type": "object",
+                "additionalProperties": false
+            }),
+            annotations: Some(json!({ "destructiveHint": true })),
+        },
+        ToolDefinition {
+            name: "list_devices",
+            title: "List Devices",
+            description: "Lists connected physical Apple devices with their UUIDs, names, and connection status.",
+            input_schema: json!({
+                "type": "object",
+                "additionalProperties": false
             }),
             annotations: Some(json!({ "readOnlyHint": true })),
         },
@@ -547,6 +569,30 @@ pub fn call_tool(
                 }
             };
             Ok(execute_list_sims(params, runner))
+        }
+        "open_sim" => {
+            let _params: OpenSimParamsInput = match serde_json::from_value(args) {
+                Ok(params) => params,
+                Err(err) => {
+                    return Ok(ToolResponse::error(
+                        "Parameter validation failed".to_string(),
+                        Some(err.to_string()),
+                    ));
+                }
+            };
+            Ok(execute_open_sim(runner))
+        }
+        "list_devices" => {
+            let params: ListDevicesParams = match serde_json::from_value(args) {
+                Ok(params) => params,
+                Err(err) => {
+                    return Ok(ToolResponse::error(
+                        "Parameter validation failed".to_string(),
+                        Some(err.to_string()),
+                    ));
+                }
+            };
+            Ok(execute_list_devices(params, runner))
         }
         "discover_projs" => {
             let params: DiscoverProjsParamsInput = match serde_json::from_value(args) {

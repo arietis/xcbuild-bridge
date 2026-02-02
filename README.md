@@ -34,6 +34,8 @@ args = []
 - `session-show-defaults`
 - `session-clear-defaults`
 - `list_sims`
+- `open_sim`
+- `list_devices`
 - `discover_projs`
 - `list_schemes`
 - `get_app_bundle_id`
