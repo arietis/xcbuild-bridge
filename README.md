@@ -43,6 +43,7 @@ args = []
 - `build_run_sim`
 - `install_app_sim`
 - `launch_app_sim`
+- `launch_app_logs_sim`
 - `stop_app_sim`
 - `start_sim_log_cap`
 - `stop_sim_log_cap`

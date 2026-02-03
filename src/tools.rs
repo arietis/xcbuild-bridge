@@ -23,6 +23,9 @@ use crate::install_app_sim::{
 use crate::launch_app_sim::{
     LaunchAppSimParamsInput, execute_launch_app_sim, launch_app_sim_from_input,
 };
+use crate::launch_app_logs_sim::{
+    LaunchAppLogsSimParamsInput, execute_launch_app_logs_sim, launch_app_logs_sim_from_input,
+};
 use crate::log_sessions::LogSessionStore;
 use crate::list_devices::{ListDevicesParams, execute_list_devices};
 use crate::list_schemes::{ListSchemesParamsInput, execute_list_schemes, list_schemes_from_input};
@@ -289,6 +292,25 @@ pub fn tool_definitions() -> Vec<ToolDefinition> {
                     "simulatorName": { "type": "string" },
                     "bundleId": { "type": "string" },
                     "args": { "type": "array", "items": { "type": "string" } },
+                    "useLatestOS": { "type": "boolean" }
+                },
+                "required": ["bundleId"]
+            }),
+            annotations: Some(json!({ "destructiveHint": true })),
+        },
+        ToolDefinition {
+            name: "launch_app_logs_sim",
+            title: "Launch App Logs Simulator",
+            description: "Launches an app in an iOS simulator and captures its logs.",
+            input_schema: json!({
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                    "simulatorId": { "type": "string" },
+                    "simulatorName": { "type": "string" },
+                    "bundleId": { "type": "string" },
+                    "args": { "type": "array", "items": { "type": "string" } },
+                    "captureConsole": { "type": "boolean" },
                     "useLatestOS": { "type": "boolean" }
                 },
                 "required": ["bundleId"]
@@ -730,6 +752,27 @@ pub fn call_tool(
                 }
             };
             Ok(execute_launch_app_sim(merged, runner))
+        }
+        "launch_app_logs_sim" => {
+            let params: LaunchAppLogsSimParamsInput = match serde_json::from_value(args) {
+                Ok(params) => params,
+                Err(err) => {
+                    return Ok(ToolResponse::error(
+                        "Parameter validation failed".to_string(),
+                        Some(err.to_string()),
+                    ));
+                }
+            };
+            let merged = match launch_app_logs_sim_from_input(params, &session.get_all()) {
+                Ok(merged) => merged,
+                Err(err) => {
+                    return Ok(ToolResponse::error(
+                        "Parameter validation failed".to_string(),
+                        Some(err),
+                    ));
+                }
+            };
+            Ok(execute_launch_app_logs_sim(merged, log_sessions, runner))
         }
         "stop_app_sim" => {
             let params: StopAppSimParamsInput = match serde_json::from_value(args) {

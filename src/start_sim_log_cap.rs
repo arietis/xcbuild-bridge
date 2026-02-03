@@ -32,6 +32,12 @@ pub struct StartSimLogCapParams {
     pub use_latest_os: bool,
 }
 
+pub(crate) struct LogCaptureStart {
+    pub session_id: String,
+    pub simulator_id: String,
+    pub capture_console: bool,
+}
+
 pub fn start_sim_log_cap_from_input(
     input: StartSimLogCapParamsInput,
     defaults: &SessionDefaults,
@@ -82,49 +88,65 @@ pub fn execute_start_sim_log_cap(
         }
     };
 
-    let log_path = match create_log_file_path() {
-        Ok(path) => path,
+    let start = match start_log_capture_session(
+        &simulator_id,
+        &params.bundle_id,
+        params.capture_console,
+        &params.subsystem_filter,
+        &[],
+        sessions,
+    ) {
+        Ok(start) => start,
         Err(err) => {
-            return ToolResponse::error("Failed to create log file".to_string(), Some(err));
+            return ToolResponse::error("Failed to start log capture".to_string(), Some(err));
         }
     };
 
-    let file = match OpenOptions::new()
+    let mut lines = Vec::new();
+    lines.push(format!(
+        "Log capture started successfully. Session ID: {}.",
+        start.session_id
+    ));
+    if start.capture_console {
+        lines.push("Note: App was relaunched to capture console output.".to_string());
+    }
+    lines.push("Next steps:".to_string());
+    lines.push(format!(
+        "1. Interact with your app on simulator {}.",
+        start.simulator_id
+    ));
+    lines.push(format!(
+        "2. Stop and retrieve logs: stop_sim_log_cap({{ logSessionId: \"{}\" }})",
+        start.session_id
+    ));
+
+    ToolResponse::text(lines.join("\n"), true)
+}
+
+pub(crate) fn start_log_capture_session(
+    simulator_id: &str,
+    bundle_id: &str,
+    capture_console: bool,
+    subsystem_filter: &SubsystemFilter,
+    launch_args: &[String],
+    sessions: &mut LogSessionStore,
+) -> Result<LogCaptureStart, String> {
+    let log_path = create_log_file_path()?;
+
+    let file = OpenOptions::new()
         .create(true)
         .write(true)
         .truncate(true)
         .open(&log_path)
-    {
-        Ok(file) => file,
-        Err(err) => {
-            return ToolResponse::error("Failed to open log file".to_string(), Some(err.to_string()));
-        }
-    };
-
+        .map_err(|err| err.to_string())?;
     drop(file);
 
-    let predicate = build_log_predicate(&params.bundle_id, &params.subsystem_filter);
+    let predicate = build_log_predicate(bundle_id, subsystem_filter);
     let mut processes = Vec::new();
 
-    if params.capture_console {
-        let stdout = match open_log_append(&log_path) {
-            Ok(file) => file,
-            Err(err) => {
-                return ToolResponse::error(
-                    "Failed to prepare log file".to_string(),
-                    Some(err),
-                );
-            }
-        };
-        let stderr = match open_log_append(&log_path) {
-            Ok(file) => file,
-            Err(err) => {
-                return ToolResponse::error(
-                    "Failed to prepare log file".to_string(),
-                    Some(err),
-                );
-            }
-        };
+    if capture_console {
+        let stdout = open_log_append(&log_path)?;
+        let stderr = open_log_append(&log_path)?;
 
         let mut cmd = Command::new("xcrun");
         cmd.args([
@@ -132,44 +154,34 @@ pub fn execute_start_sim_log_cap(
             "launch",
             "--console-pty",
             "--terminate-running-process",
-            &simulator_id,
-            &params.bundle_id,
+            simulator_id,
+            bundle_id,
         ])
+        .args(launch_args)
         .stdin(Stdio::null())
         .stdout(Stdio::from(stdout))
         .stderr(Stdio::from(stderr));
 
-        match cmd.spawn() {
-            Ok(child) => processes.push(child),
-            Err(err) => {
-                return ToolResponse::error(
-                    "Failed to start console log capture".to_string(),
-                    Some(err.to_string()),
-                );
-            }
-        };
+        let child = cmd
+            .spawn()
+            .map_err(|err| format!("Failed to start console log capture: {}", err))?;
+        processes.push(child);
     }
 
-    let stdout = match open_log_append(&log_path) {
-        Ok(file) => file,
-        Err(err) => {
-            terminate_processes(&mut processes);
-            return ToolResponse::error("Failed to prepare log file".to_string(), Some(err));
-        }
-    };
-    let stderr = match open_log_append(&log_path) {
-        Ok(file) => file,
-        Err(err) => {
-            terminate_processes(&mut processes);
-            return ToolResponse::error("Failed to prepare log file".to_string(), Some(err));
-        }
-    };
+    let stdout = open_log_append(&log_path).map_err(|err| {
+        terminate_processes(&mut processes);
+        err
+    })?;
+    let stderr = open_log_append(&log_path).map_err(|err| {
+        terminate_processes(&mut processes);
+        err
+    })?;
 
     let mut cmd = Command::new("xcrun");
     cmd.args([
         "simctl",
         "spawn",
-        &simulator_id,
+        simulator_id,
         "log",
         "stream",
         "--level=debug",
@@ -184,45 +196,23 @@ pub fn execute_start_sim_log_cap(
         cmd.args(["--predicate", &predicate]);
     }
 
-    let child = match cmd.spawn() {
-        Ok(child) => child,
-        Err(err) => {
-            terminate_processes(&mut processes);
-            return ToolResponse::error(
-                "Failed to start log capture".to_string(),
-                Some(err.to_string()),
-            );
-        }
-    };
-
+    let child = cmd
+        .spawn()
+        .map_err(|err| format!("Failed to start log capture: {}", err))?;
     processes.push(child);
 
     let session_id = sessions.insert(
         processes,
         log_path,
-        simulator_id.clone(),
-        params.bundle_id.clone(),
+        simulator_id.to_string(),
+        bundle_id.to_string(),
     );
 
-    let mut lines = Vec::new();
-    lines.push(format!(
-        "Log capture started successfully. Session ID: {}.",
-        session_id
-    ));
-    if params.capture_console {
-        lines.push("Note: App was relaunched to capture console output.".to_string());
-    }
-    lines.push("Next steps:".to_string());
-    lines.push(format!(
-        "1. Interact with your app on simulator {}.",
-        simulator_id
-    ));
-    lines.push(format!(
-        "2. Stop and retrieve logs: stop_sim_log_cap({{ logSessionId: \"{}\" }})",
-        session_id
-    ));
-
-    ToolResponse::text(lines.join("\n"), true)
+    Ok(LogCaptureStart {
+        session_id,
+        simulator_id: simulator_id.to_string(),
+        capture_console,
+    })
 }
 
 fn create_log_file_path() -> Result<PathBuf, String> {

@@ -11,6 +11,7 @@ pub mod get_app_bundle_id;
 pub mod get_sim_app_path;
 pub mod install_app_sim;
 pub mod launch_app_sim;
+pub mod launch_app_logs_sim;
 pub mod list_sims;
 pub mod list_devices;
 pub mod list_schemes;
